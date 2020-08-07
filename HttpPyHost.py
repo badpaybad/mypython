@@ -18,6 +18,7 @@ class HttpRequest:
     _splitSpeace = ' '
     _splitSlash = '/'
     _splitColon = ':'
+    httpVersion = ""
     method = ""
     header = ""
     body = ""
@@ -26,16 +27,17 @@ class HttpRequest:
     urlFull = ""
     raw: str
 
-    def ToJson(self):        
+    def ToJson(self):
         return json.dumps({
-                    "header":self.header,
-                    "body": self.body,
-                    "method":self.method,
-                    "url":self.url,
-                    "urlParam":self.urlParam,
-                    "urlFull":self.urlFull,
-                    "raw":self.raw
-                })
+            "httpVersion": self.httpVersion,
+            "header": self.header,
+            "body": self.body,
+            "method": self.method,
+            "url": self.url,
+            "urlParam": self.urlParam,
+            "urlFull": self.urlFull,
+            "raw": self.raw
+        })
 
     def __init__(self):
         pass
@@ -48,6 +50,8 @@ class HttpRequest:
         # parse your received string
         lines = strReceived.split(self._splitNewLine)
         firstLine = lines[0].split(self._splitSpeace)
+        self.httpVersion = firstLine[2].strip(self._splitCr).strip(
+            self._splitNewLine).strip(self._splitSpeace)
         self.urlFull = firstLine[1]
         urlParams = self.urlFull.split(self._splitQuery)
         self.url = urlParams[0]
@@ -64,8 +68,8 @@ class HttpRequest:
 
         for i in range(beginBody, linesCount):
             self.body = self.body + lines[i]+"\n"
-        
-        self.body=self.body.strip(self._splitCr).strip(self._splitNewLine)
+
+        self.body = self.body.strip(self._splitCr).strip(self._splitNewLine)
         return self
 
 
@@ -73,11 +77,13 @@ class HttpResponse:
     header = ""
     body = ""
     httpStatus = ""
+    _request: HttpRequest
 
-    def __init__(self):
+    def __init__(self, request: HttpRequest):
         self.header: str
         self.body: str
-        self.httpStatus: str
+        self.httpStatus = "200"
+        self._request = request
 
     def JsonContent(self, obj):
         self.body = json.dumps(obj)
@@ -86,15 +92,15 @@ class HttpResponse:
 
     def NotFound404(self, request: HttpRequest):
         self.httpStatus = "404"
-        self.body= request.ToJson()
+        self.body = request.ToJson()
         return self
 
-    def ToJson(self):        
+    def ToJson(self):
         return json.dumps({
-                    "header":self.header,
-                    "body": self.body,
-                    "httpStatus":self.httpStatus
-                })
+            "header": self.header,
+            "body": self.body,
+            "httpStatus": self.httpStatus
+        })
 
 
 class RoutingHandle:
@@ -105,23 +111,24 @@ class RoutingHandle:
 
     def Index(self, request: HttpRequest):
 
-        return HttpResponse().JsonContent({"name": "nguyen phan du"})
+        return HttpResponse(request).JsonContent({"name": "nguyen phan du"})
 
     def Handle(self, request: HttpRequest):
         if (request.url in self.__routing):
             return self.__routing[request.url](request)
 
-        return HttpResponse().NotFound404(request)
+        return HttpResponse(request).NotFound404(request)
 
 
-def socketHandleRequest(conn:socket.socket):
+def socketHandleRequest(conn: socket.socket):
     try:
         requestData = []
         while True:
-            temp = conn.recv(1024,0)
+            temp = conn.recv(4096, 0)
             if not temp:
                 break
-            requestData.append(temp)            
+            requestData.append(temp)
+            #break
 
         # process requestData
         requestInString = ''.join(map(lambda x: str(x, "utf-8"), requestData))
@@ -134,26 +141,26 @@ def socketHandleRequest(conn:socket.socket):
 
         # process response
         if not objResponse:
-            objResponse = HttpResponse().NotFound404(objRequest)
+            objResponse = HttpResponse(objRequest).NotFound404(objRequest)
 
         bodyInBytes = bytes(objResponse.body, "utf-8")
 
+        objResponse.header = objResponse.header + objRequest.httpVersion+" "+objResponse.httpStatus+"\r\n"
         objResponse.header = objResponse.header+"Server: HttpPyHost-v1\r\n"
         objResponse.header = objResponse.header+"Content-Type: application/json\r\n"
         objResponse.header = objResponse.header+"Connection: close\r\n"
-        objResponse.header = objResponse.header + \
-            f"Content-Length: {len(bodyInBytes)}\r\n\r\n"
+        objResponse.header = objResponse.header + f"Content-Length: {len(bodyInBytes)}\r\n\r\n"
 
         try:
-            conn.sendall(bytes(objResponse.header, "utf-8"),0)
-            conn.sendall(bodyInBytes,0)
+            conn.sendall(bytes(objResponse.header, "utf-8"), 0)
+            conn.sendall(bodyInBytes, 0)
         except Exception as e:
-            print(json.dumps({"code":"0","message":f"{e}"}))
+            print(json.dumps({"code": "0", "message": f"{e}"}))
 
         conn.close()
     except Exception as ex:
         print(f"{ex}")
-    
+
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_address = ('localhost', 8081)
@@ -162,13 +169,13 @@ sock.listen(100)
 sock.settimeout(120)
 print(f"Listening {server_address}")
 while True:
-    try:    
+    try:
         conn, client_address = sock.accept()  # wait next request comming
         print(f"Connected Client address: {client_address}")
-        # process current request   
-        threading.Thread(target= socketHandleRequest(conn), daemon=True).start()
-       
+        # process current request
+        threading.Thread(target=socketHandleRequest(conn), daemon=True).start()
+
     except Exception as ell:
-        print(json.dumps({"code":"0","message":f"{ell}"}))
+        print(json.dumps({"code": "0", "message": f"{ell}"}))
 
 sock.close()
