@@ -12,3 +12,10 @@ class Test:
 test =Test("Hi").changeName("Du")
 
 print (test.name)
+
+
+map={}
+map["x"]= lambda x : print(x)
+map["y"]= lambda x: Test(x).name
+
+print (map["y"]("Abc"))

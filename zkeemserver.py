@@ -36,6 +36,29 @@ class HttpResponse:
         return self
 
 
+class ZkeemRequestHandle:
+    def __init__(self):
+        self.map = {}
+        self.map["/"] = self.Index        
+        self.map["iclock/cdata"] = self.IclockCdata        
+        
+    def Index(self, request: HttpRequest):
+       
+        return request
+
+    def IclockCdata(self, request: HttpRequest):
+        objResponse=None
+        if request.url.index("iclock/cdata") == 0:
+            if request.method == "get":
+                objResponse = HttpResponse().CdataGet(request)
+            else:
+                objResponse = HttpResponse().CdataPost(request)
+            return objResponse
+
+    def Handle(self, request: HttpRequest):
+        return self.map[request.url](request)
+
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_address = ('192.168.2.44', 8081)
 sock.bind(server_address)
@@ -52,13 +75,11 @@ while True:
         requestData.append(temp)
     # process requestData
     requestInString = ''.join(map(chr, requestData))
+    
     objRequest = HttpRequest(requestInString)
-    objResponse = None
-    if objRequest.url.index("iclock/cdata") == 0:
-        if objRequest.method == "get":
-            objResponse = HttpResponse().CdataGet(objRequest)
-        else:
-            objResponse = HttpResponse().CdataPost(objRequest)
+
+    objResponse = ZkeemRequestHandle().Handle(objRequest)
+    
     # process response
     if objResponse != None:
         conn.send(bytes(objResponse.header, "utf-8"))
