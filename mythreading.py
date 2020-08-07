@@ -19,3 +19,9 @@ map["x"]= lambda x : print(x)
 map["y"]= lambda x: Test(x).name
 
 print (map["y"]("Abc"))
+
+
+none=None
+
+print (none==None)
+print (none=='None')

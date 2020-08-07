@@ -4,50 +4,58 @@ import sys
 
 class HttpRequest:
     def __init__(self, strReceived):
-        self.method = ""
-        self.header = ""
-        self.body = ""
-        self.url = ""
+        self.method: str
+        self.header: str
+        self.body: str
+        self.url: str
+        self.urlFull: str
         self.raw = strReceived
         self.parse(strReceived)
 
     def parse(self, strReceived):
         # parse your received string
-        self.method = ""
-        self.header = ""
-        self.body = ""
-        self.url = ""
+        self.method: str
+        self.header: str
+        self.body: str
+        self.url: str
         return self
 
 
 class HttpResponse:
     def __init__(self):
-        self.header = ""
-        self.body = ""
+        self.header: str
+        self.body = "OK"
+        self.httpStatus = None
 
     def CdataPost(self, request: HttpRequest):
-        self.header = ""
+
         self.body = "OK"
+        self.httpStatus = "200 OK"
         return self
 
     def CdataGet(self, request: HttpRequest):
-        self.header = ""
+
         self.body = "OK"
+        self.httpStatus = "200 OK"
+        return self
+
+    def NotFound404(self, request: HttpRequest):
+        self.httpStatus = "404"
         return self
 
 
 class ZkeemRequestHandle:
     def __init__(self):
         self.map = {}
-        self.map["/"] = self.Index        
-        self.map["iclock/cdata"] = self.IclockCdata        
-        
+        self.map["/"] = self.Index
+        self.map["iclock/cdata"] = self.IclockCdata
+
     def Index(self, request: HttpRequest):
-       
+
         return request
 
     def IclockCdata(self, request: HttpRequest):
-        objResponse=None
+        objResponse = None
         if request.url.index("iclock/cdata") == 0:
             if request.method == "get":
                 objResponse = HttpResponse().CdataGet(request)
@@ -56,7 +64,10 @@ class ZkeemRequestHandle:
             return objResponse
 
     def Handle(self, request: HttpRequest):
-        return self.map[request.url](request)
+        if (request.url in self.map):
+            return self.map[request.url](request)
+
+        return HttpResponse().NotFound404(request)
 
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -75,11 +86,11 @@ while True:
         requestData.append(temp)
     # process requestData
     requestInString = ''.join(map(chr, requestData))
-    
+
     objRequest = HttpRequest(requestInString)
 
     objResponse = ZkeemRequestHandle().Handle(objRequest)
-    
+
     # process response
     if objResponse != None:
         conn.send(bytes(objResponse.header, "utf-8"))
