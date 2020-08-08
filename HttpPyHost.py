@@ -7,6 +7,7 @@ import datetime
 import multiprocessing
 import os
 import json
+from typing import Any, cast
 
 
 class HttpRequest:
@@ -38,15 +39,13 @@ class HttpRequest:
             "urlFull": self.urlFull,
             "raw": self.raw
         })
-
-    def __init__(self):
-        pass
-
-    def __init__(self, strReceived):
+    
+    def __init__(self, strReceived=""):
         self.raw = strReceived
         self.__parse(strReceived)
 
     def __parse(self, strReceived):
+        if strReceived=="": return
         # parse your received string
         lines = strReceived.split(self._splitNewLine)
         firstLine = lines[0].split(self._splitSpeace)
@@ -79,11 +78,11 @@ class HttpResponse:
     httpStatus = ""
     _request: HttpRequest
 
-    def __init__(self, request: HttpRequest):
+    def __init__(self, request: HttpRequest=Any):
         self.header: str
         self.body: str
         self.httpStatus = "200"
-        self._request = request
+        self._request = cast(HttpRequest, request) if isinstance(request, HttpRequest) else  HttpRequest()
 
     def JsonContent(self, obj):
         self.body = json.dumps(obj)
@@ -102,7 +101,6 @@ class HttpResponse:
             "httpStatus": self.httpStatus
         })
 
-
 class RoutingHandle:
     def __init__(self):
         self.__routing = {}
@@ -111,16 +109,16 @@ class RoutingHandle:
 
     def Index(self, request: HttpRequest):
 
-        return HttpResponse(request).JsonContent({"name": "nguyen phan du"})
+        return HttpResponse().JsonContent({"name": "nguyen phan du"})
 
     def Handle(self, request: HttpRequest):
         if (request.url in self.__routing):
             return self.__routing[request.url](request)
 
-        return HttpResponse(request).NotFound404(request)
+        return HttpResponse().NotFound404(request)
 
 
-def socketHandleRequest(conn: socket.socket):
+def socketHandleRequest(conn: socket.socket, clientAddress):
     try:
         requestData = []
         while True:
@@ -142,7 +140,7 @@ def socketHandleRequest(conn: socket.socket):
 
         # process response
         if not objResponse:
-            objResponse = HttpResponse(objRequest).NotFound404(objRequest)
+            objResponse = HttpResponse().NotFound404(objRequest)
 
         bodyInBytes = bytes(objResponse.body, "utf-8")
 
@@ -160,26 +158,72 @@ def socketHandleRequest(conn: socket.socket):
             conn.sendall(bodyInBytes, 0)
         except Exception as e:
             print(json.dumps({"code": "0", "message": f"{e}"}))
-
-        conn.close()
     except Exception as ex:
         print(f"{ex}")
+    finally:         
+        conn.close()
 
+_hostOrDomain="localhost"
+_port=8081
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = ('localhost', 8081)
+server_address = (_hostOrDomain, _port)
 sock.bind(server_address)
-sock.listen(100)
+sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+sock.listen(1)
 sock.settimeout(120)
+
 print(f"Listening {server_address}")
+
+_isStopListenter=False
+
+def socketWorker (currentSock:socket.socket):   
+    while not _isStopListenter:
+        try:
+            client_conn, client_address = currentSock.accept()  # wait next request comming
+            print(f"Connected Client address: {client_address}")
+            # process current request
+            currentConnectThread=threading.Thread(target=socketHandleRequest, args=(client_conn,client_address,))
+            currentConnectThread.daemon=True
+            currentConnectThread.start()
+
+        except Exception as ell:
+            print(json.dumps({"code": "0", "message": f"{ell}"}))
+        
+"""
+# can not do multiprocessing
+_socketWorkers=[]
+for in in range(10)
+    sw = multiprocessing.Process(target=socketWorker, args=(sock,))
+    _socketWorkers.append(sw)
+
+for sw in _socketWorkers:
+    sw.daemon=True
+    sw.start()
+"""
+mainThread=threading.Thread(target=socketWorker, args=(sock,) , daemon=True)
+mainThread.start()
+
 while True:
+    cmd = input()
+    if cmd =="quit":               
+        break
+    else :
+        time.sleep(1)
+
+_isStopListenter=True
+
+def _selfCallStop():
     try:
-        conn, client_address = sock.accept()  # wait next request comming
-        print(f"Connected Client address: {client_address}")
-        # process current request
-        threading.Thread(target=socketHandleRequest(conn), daemon=True).start()
+        print("Call to stop socket listener")
+        callToClose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        callToClose.connect((_hostOrDomain,_port))    
 
-    except Exception as ell:
-        print(json.dumps({"code": "0", "message": f"{ell}"}))
 
-sock.close()
+_selfCallStop()
+
+mainThread.join()
+
+sock.close()   
+
+print("Stoped socket")
