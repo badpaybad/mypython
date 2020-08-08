@@ -9,8 +9,7 @@ import os
 import json
 from typing import Any, cast
 
-
-class HttpRequest:
+class Contants:
     _splitCr = '\r'
     _splitNewLine = '\n'
     _splitQuery = '?'
@@ -19,47 +18,50 @@ class HttpRequest:
     _splitSpeace = ' '
     _splitSlash = '/'
     _splitColon = ':'
-    httpVersion = ""
-    method = ""
-    header = ""
-    body = ""
-    url = ""
-    urlParam = ""
-    urlFull = ""
-    raw: str
+
+class HttpRequest:
+    
+    def __init__(self, strReceived=""):
+        self.httpVersion = ""
+        self.method = ""
+        self.header = ""
+        self.body = ""
+        self.url = ""
+        self.urlParam = ""
+        self.urlFull = ""
+        self.raw: str
+        self.raw = strReceived
+        self.__parse(strReceived)
 
     def ToJson(self):
         return json.dumps({
             "httpVersion": self.httpVersion,
+            "method": self.method,
             "header": self.header,
             "body": self.body,
-            "method": self.method,
             "url": self.url,
             "urlParam": self.urlParam,
             "urlFull": self.urlFull,
             "raw": self.raw
         })
-    
-    def __init__(self, strReceived=""):
-        self.raw = strReceived
-        self.__parse(strReceived)
 
     def __parse(self, strReceived):
-        if strReceived=="": return
+        if strReceived=="": 
+            return self
         # parse your received string
-        lines = strReceived.split(self._splitNewLine)
-        firstLine = lines[0].split(self._splitSpeace)
-        self.httpVersion = firstLine[2].strip(self._splitCr).strip(
-            self._splitNewLine).strip(self._splitSpeace)
+        lines = strReceived.split(Contants._splitNewLine)
+        firstLine = lines[0].split(Contants._splitSpeace)
+        self.httpVersion = firstLine[2].strip(Contants._splitCr).strip(
+            Contants._splitNewLine).strip(Contants._splitSpeace)
         self.urlFull = firstLine[1]
-        urlParams = self.urlFull.split(self._splitQuery)
+        urlParams = self.urlFull.split(Contants._splitQuery)
         self.url = urlParams[0]
         self.urlParam = urlParams[1] if len(urlParams) > 1 else ""
         self.method = firstLine[0].lower()
         beginBody = 0
         linesCount = len(lines)
         for i in range(1, linesCount):
-            l = lines[i].strip(self._splitCr).strip(self._splitNewLine)
+            l = lines[i].strip(Contants._splitCr).strip(Contants._splitNewLine)
             self.header = self.header + l+"\n"
             if(not l):
                 beginBody = i
@@ -68,19 +70,15 @@ class HttpRequest:
         for i in range(beginBody, linesCount):
             self.body = self.body + lines[i]+"\n"
 
-        self.body = self.body.strip(self._splitCr).strip(self._splitNewLine)
+        self.body = self.body.strip(Contants._splitCr).strip(Contants._splitNewLine)
         return self
 
 
-class HttpResponse:
-    header = ""
-    body = ""
-    httpStatus = ""
-    _request: HttpRequest
+class HttpResponse:  
 
     def __init__(self, request: HttpRequest=Any):
-        self.header: str
-        self.body: str
+        self.header = ""
+        self.body = ""
         self.httpStatus = "200"
         self._request = cast(HttpRequest, request) if isinstance(request, HttpRequest) else  HttpRequest()
 
@@ -193,7 +191,7 @@ def socketWorker (currentSock:socket.socket):
 """
 # can not do multiprocessing
 _socketWorkers=[]
-for in in range(10)
+for i in range(10)
     sw = multiprocessing.Process(target=socketWorker, args=(sock,))
     _socketWorkers.append(sw)
 
@@ -201,6 +199,7 @@ for sw in _socketWorkers:
     sw.daemon=True
     sw.start()
 """
+
 mainThread=threading.Thread(target=socketWorker, args=(sock,) , daemon=True)
 mainThread.start()
 
@@ -213,14 +212,12 @@ while True:
 
 _isStopListenter=True
 
-def _selfCallStop():
-    try:
-        print("Call to stop socket listener")
-        callToClose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        callToClose.connect((_hostOrDomain,_port))    
-
-
-_selfCallStop()
+try:
+    print("Call to stop socket listener")
+    callToClose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    callToClose.connect((_hostOrDomain,_port))    
+except:
+    pass
 
 mainThread.join()
 
