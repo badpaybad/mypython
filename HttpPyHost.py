@@ -89,7 +89,7 @@ class HttpResponse:
 
     def NotFound404(self, request: HttpRequest):
         self.httpStatus = "404"
-        self.body = request.ToJson()
+        self.body = "404 Not found"
         return self
 
     def ToJson(self):
@@ -164,14 +164,14 @@ def socketHandleRequest(conn: socket.socket, clientAddress):
 _hostOrDomain="localhost"
 _port=8081
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = (_hostOrDomain, _port)
-sock.bind(server_address)
-sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
-sock.listen(1)
-sock.settimeout(120)
+_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+_server_address = (_hostOrDomain, _port)
+_sock.bind(_server_address)
+_sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+_sock.listen(1)
+_sock.settimeout(120)
 
-print(f"Listening {server_address}")
+print(f"Listening {_server_address}")
 
 _isStopListenter=False
 
@@ -189,10 +189,12 @@ def socketWorker (currentSock:socket.socket):
             print(json.dumps({"code": "0", "message": f"{ell}"}))
         
 """
+# need help : got error OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
 # can not do multiprocessing
 _socketWorkers=[]
-for i in range(10)
-    sw = multiprocessing.Process(target=socketWorker, args=(sock,))
+
+for i in range(10):
+    sw = multiprocessing.Process(target=socketWorker, args=(_sock,))
     _socketWorkers.append(sw)
 
 for sw in _socketWorkers:
@@ -200,8 +202,8 @@ for sw in _socketWorkers:
     sw.start()
 """
 
-mainThread=threading.Thread(target=socketWorker, args=(sock,) , daemon=True)
-mainThread.start()
+_mainThread=threading.Thread(target=socketWorker, args=(_sock,) , daemon=True)
+_mainThread.start()
 
 while True:
     cmd = input()
@@ -214,13 +216,13 @@ _isStopListenter=True
 
 try:
     print("Call to stop socket listener")
-    callToClose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    callToClose.connect((_hostOrDomain,_port))    
+    _callToClose = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    _callToClose.connect((_hostOrDomain,_port))    
 except:
     pass
 
-mainThread.join()
+_mainThread.join()
 
-sock.close()   
+_sock.close()   
 
 print("Stoped socket")
