@@ -55,8 +55,8 @@ class HttpRequest:
             Contants._splitNewLine).strip(Contants._splitSpeace)
         self.urlFull = firstLine[1]
         urlParams = self.urlFull.split(Contants._splitQuery)
-        self.url = urlParams[0]
-        self.urlParam = urlParams[1] if len(urlParams) > 1 else ""
+        self.url = urlParams[0].lower()
+        self.urlParam = (urlParams[1] if len(urlParams) > 1 else "").lower()
         self.method = firstLine[0].lower()
         beginBody = 0
         linesCount = len(lines)
@@ -104,6 +104,7 @@ class RoutingHandle:
         self.__routing = {}
         self.__routing[""] = self.Index
         self.__routing["/"] = self.Index
+        self.__routing["/iclock/cdata"]= self.Process_cdata
 
     def Index(self, request: HttpRequest):
 
@@ -114,6 +115,11 @@ class RoutingHandle:
             return self.__routing[request.url](request)
 
         return HttpResponse().NotFound404(request)
+    
+    def Process_cdata(self,request: HttpRequest):
+        res= HttpResponse()
+        #process data to return attendance device
+        return res      
 
 
 def socketHandleRequest(conn: socket.socket, clientAddress):
