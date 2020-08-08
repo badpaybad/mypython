@@ -124,17 +124,18 @@ def socketHandleRequest(conn: socket.socket):
     try:
         requestData = []
         while True:
-            temp = conn.recv(4096, 0)
-            if not temp:
-                break
+            temp = conn.recv(4096000000, 0)
+            #if not temp:
+            #    break
             requestData.append(temp)
-            #break
+            break
 
         # process requestData
         requestInString = ''.join(map(lambda x: str(x, "utf-8"), requestData))
 
         objRequest = HttpRequest(requestInString)
-
+        
+        print('Request:\r\n')
         print(requestInString)
 
         objResponse = RoutingHandle().Handle(objRequest)
@@ -152,6 +153,9 @@ def socketHandleRequest(conn: socket.socket):
         objResponse.header = objResponse.header + f"Content-Length: {len(bodyInBytes)}\r\n\r\n"
 
         try:
+            print('Response:\r\n')
+            print(objResponse.header)
+            print(objResponse.body)
             conn.sendall(bytes(objResponse.header, "utf-8"), 0)
             conn.sendall(bodyInBytes, 0)
         except Exception as e:
