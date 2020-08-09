@@ -216,9 +216,18 @@ def processSocketAccepted (currentSock:socket.socket):
 """
 # need help : got error OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
 # threading no error but multiprocessing got above error
+"""
+#multiprocessing this no work : OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
+#sw = multiprocessing.Process(target=processSocketAccepted, args=(_sock,), daemon=True)
+#sw.start()
+#threading: this worked well
+_mainThread=threading.Thread(target=processSocketAccepted, args=(_sock,) , daemon=True)
+_mainThread.start()
+
+""" 
 _socketWorkers=[]
 
-for i in range(10):
+for i in range(0):
     sw = multiprocessing.Process(target=processSocketAccepted, args=(_sock,))
     _socketWorkers.append(sw)
 
@@ -226,9 +235,6 @@ for sw in _socketWorkers:
     sw.daemon=True
     sw.start()
 """
-
-_mainThread=threading.Thread(target=processSocketAccepted, args=(_sock,) , daemon=True)
-_mainThread.start()
 
 while True:
     cmd = input()
@@ -246,7 +252,7 @@ try:
 except:
     pass
 
-_mainThread.join()
+#_mainThread.join()
 
 _sock.close()   
 
