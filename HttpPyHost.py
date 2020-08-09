@@ -27,9 +27,8 @@ class HttpRequest:
         self.header = ""
         self.body = ""
         self.url = ""
-        self.urlParam = ""
         self.urlFull = ""
-        self.raw: str
+        self.urlParam = ""
         self.raw = strReceived
         self.__parse(strReceived)
 
@@ -40,8 +39,8 @@ class HttpRequest:
             "header": self.header,
             "body": self.body,
             "url": self.url,
-            "urlParam": self.urlParam,
             "urlFull": self.urlFull,
+            "urlParam": self.urlParam,
             "raw": self.raw
         })
 
@@ -106,18 +105,17 @@ class RoutingHandle:
         self.__routing["/"] = self.Index
         self.__routing["/iclock/cdata"]= self.Process_cdata
 
-    def Index(self, request: HttpRequest):
-
-        return HttpResponse().JsonContent({"name": "nguyen phan du"})
-
     def Handle(self, request: HttpRequest):
         if (request.url in self.__routing):
             return self.__routing[request.url](request)
-
         return HttpResponse().NotFound404(request)
+
+    def Index(self, request: HttpRequest):
+        return HttpResponse().JsonContent({"version": "0.0.1"})
     
     def Process_cdata(self,request: HttpRequest):
-        res= HttpResponse()
+        res= HttpResponse().JsonContent({"cdata":"cdata"})
+        res.header=res.header+f"CustomHeader: python-response\r\n"
         #process data to return attendance device
         return res      
 
@@ -125,13 +123,17 @@ class RoutingHandle:
 def socketHandleRequest(conn: socket.socket, clientAddress):
     try:
         requestData = []
-        while True:
-            temp = conn.recv(4096000000, 0)
-            #if not temp:
-            #    break
-            requestData.append(temp)
-            break
-
+        
+        #not sure when use "while True" and buffer 1024 always got disconnected from client
+        #[WinError 10053] An established connection was aborted by the software in your host machine
+        #while True:
+        #    temp = conn.recv(1024, 0) 
+        #    if not temp:
+        #        break
+        #    requestData.append(temp)
+        
+        requestData.append(conn.recv(4096000000, 0))#trick get big data at one times
+        
         # process requestData
         requestInString = ''.join(map(lambda x: str(x, "utf-8"), requestData))
 
@@ -146,13 +148,15 @@ def socketHandleRequest(conn: socket.socket, clientAddress):
         if not objResponse:
             objResponse = HttpResponse().NotFound404(objRequest)
 
-        bodyInBytes = bytes(objResponse.body, "utf-8")
-
+        bodyInBytes = bytes(objResponse.body, "utf-8")        
+        tempResponseHeader = objResponse.header       
+        objResponse.header = ""
         objResponse.header = objResponse.header + objRequest.httpVersion+" "+objResponse.httpStatus+"\r\n"
         objResponse.header = objResponse.header+"Server: HttpPyHost-v1\r\n"
-        objResponse.header = objResponse.header+"Content-Type: application/json\r\n"
-        objResponse.header = objResponse.header+"Connection: close\r\n"
-        objResponse.header = objResponse.header + f"Content-Length: {len(bodyInBytes)}\r\n\r\n"
+        objResponse.header = objResponse.header+"Content-Type: application/json\r\n"        
+        objResponse.header = objResponse.header + f"Content-Length: {len(bodyInBytes)}\r\n"
+        objResponse.header = objResponse.header+tempResponseHeader     
+        objResponse.header = objResponse.header+"Connection: close\r\n\r\n"        
 
         try:
             print('Response:\r\n')
@@ -174,7 +178,7 @@ _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 _server_address = (_hostOrDomain, _port)
 _sock.bind(_server_address)
 _sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
-_sock.listen(1)
+_sock.listen(1000) #is pool size (max concurrent connection???)
 _sock.settimeout(120)
 
 print(f"Listening {_server_address}")
@@ -196,7 +200,7 @@ def socketWorker (currentSock:socket.socket):
         
 """
 # need help : got error OSError: [WinError 10048] Only one usage of each socket address (protocol/network address/port) is normally permitted
-# can not do multiprocessing
+# threading no error but multiprocessing got above error
 _socketWorkers=[]
 
 for i in range(10):
