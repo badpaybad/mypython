@@ -28,7 +28,7 @@ class HttpRequest:
         self.body = ""
         self.url = ""
         self.urlFull = ""
-        self.urlParam = ""
+        self.urlQueryString = ""
         self.raw = strReceived
         self.__parse(strReceived)
 
@@ -40,7 +40,7 @@ class HttpRequest:
             "body": self.body,
             "url": self.url,
             "urlFull": self.urlFull,
-            "urlParam": self.urlParam,
+            "urlQueryString": self.urlQueryString,
             "raw": self.raw
         })
 
@@ -55,8 +55,8 @@ class HttpRequest:
         self.urlFull = firstLine[1]
         urlParams = self.urlFull.split(Contants._splitQuery)
         self.url = urlParams[0].lower()
-        self.urlParam = (urlParams[1] if len(urlParams) > 1 else "").lower()
-        self.method = firstLine[0].lower()
+        self.urlQueryString = urlParams[1] if len(urlParams) > 1 else ""
+        self.method = firstLine[0].upper()
         beginBody = 0
         linesCount = len(lines)
         for i in range(1, linesCount):
@@ -105,6 +105,12 @@ class RoutingHandle:
         self.__routing["/"] = self.Index
         self.__routing["/iclock/cdata"]= self.Process_cdata
 
+    def RegisterHanle(self, url:str, func):
+        if url.startswith("/")==False :
+            url="/"+url
+        url=url.lower()
+        self.__routing[url]=func
+
     def Handle(self, request: HttpRequest):
         if (request.url in self.__routing):
             return self.__routing[request.url](request)
@@ -114,11 +120,20 @@ class RoutingHandle:
         return HttpResponse().JsonContent({"version": "0.0.1"})
     
     def Process_cdata(self,request: HttpRequest):
-        res= HttpResponse().JsonContent({"cdata":"cdata"})
+        res= HttpResponse().JsonContent({"cdata":"cdata", "queryString": request.urlQueryString})
         res.header=res.header+f"CustomHeader: python-response\r\n"
         #process data to return attendance device
         return res      
 
+### static void Main
+
+__globalRoutingHandle = RoutingHandle()
+
+#dynamic register url routing
+__globalRoutingHandle.RegisterHanle("Test", lambda r: FunctionForRoutingTest(r) )
+
+def FunctionForRoutingTest(request:HttpRequest):
+    return HttpResponse().JsonContent({"Test":"Test"})
 
 def socketHandleRequest(conn: socket.socket, clientAddress):
     try:
@@ -142,7 +157,7 @@ def socketHandleRequest(conn: socket.socket, clientAddress):
         print('Request:\r\n')
         print(requestInString)
 
-        objResponse = RoutingHandle().Handle(objRequest)
+        objResponse = __globalRoutingHandle.Handle(objRequest)
 
         # process response
         if not objResponse:
@@ -185,15 +200,15 @@ print(f"Listening {_server_address}")
 
 _isStopListenter=False
 
-def socketWorker (currentSock:socket.socket):   
+def processSocketAccepted (currentSock:socket.socket):   
     while not _isStopListenter:
         try:
             client_conn, client_address = currentSock.accept()  # wait next request comming
             print(f"Connected Client address: {client_address}")
             # process current request
-            currentConnectThread=threading.Thread(target=socketHandleRequest, args=(client_conn,client_address,))
-            currentConnectThread.daemon=True
-            currentConnectThread.start()
+            currentConnectedThread=threading.Thread(target=socketHandleRequest, args=(client_conn,client_address,))
+            currentConnectedThread.daemon=True
+            currentConnectedThread.start()
 
         except Exception as ell:
             print(json.dumps({"code": "0", "message": f"{ell}"}))
@@ -204,7 +219,7 @@ def socketWorker (currentSock:socket.socket):
 _socketWorkers=[]
 
 for i in range(10):
-    sw = multiprocessing.Process(target=socketWorker, args=(_sock,))
+    sw = multiprocessing.Process(target=processSocketAccepted, args=(_sock,))
     _socketWorkers.append(sw)
 
 for sw in _socketWorkers:
@@ -212,7 +227,7 @@ for sw in _socketWorkers:
     sw.start()
 """
 
-_mainThread=threading.Thread(target=socketWorker, args=(_sock,) , daemon=True)
+_mainThread=threading.Thread(target=processSocketAccepted, args=(_sock,) , daemon=True)
 _mainThread.start()
 
 while True:
