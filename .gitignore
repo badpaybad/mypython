@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+#du prj
+duFace_*.jpg
+input_*.jpg
+*.bin
+/result/*
