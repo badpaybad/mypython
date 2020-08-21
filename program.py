@@ -1,17 +1,19 @@
 import bootstrap
 from entities.cmscontent import cmscontent
+import libs.HttpPyHost
+from libs.HttpPyHost import HttpResponse
 
-for c in cmscontent.objects.all():
-    print(c)
-
-print("where condition")
-for c in cmscontent.objects.filter(UrlRef=""):
-    print (c)
-
-while True:
+if( __name__ =="__main__"):
+    # register your routing handle
+    libs.HttpPyHost.__globalRoutingHandle.RegisterHanle("/test", lambda r: libs.HttpPyHost.HttpResponse().JsonContent({"id":"test"}))
     
-    print("Type 'quit' to exit program")
-    cmd = input()
+    #start your code here
 
-    if(cmd=='quit'):
-        exit(0)  
+    libs.HttpPyHost.__globalHttpServer.Start()
+    while True:
+        cmd=input()
+        if(cmd=='quit'):
+            libs.HttpPyHost.__globalHttpServer.Stop()
+            break   
+        
+        print("Type 'quit' to exit")
