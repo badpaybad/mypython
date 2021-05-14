@@ -59,8 +59,8 @@ class DlibResNet:
 
             zipfile = bz2.BZ2File(output)
             data = zipfile.read()
-            newfilepath = output[:-4]  # discard .bz2 extension
-            open(newfilepath, 'wb').write(data)
+            #newfilepath = output[:-4]  # discard .bz2 extension
+            open(self.file_weights, 'wb').write(data)
 
         # ---------------------
 
@@ -988,13 +988,13 @@ class FaceNet:
         return model
 
     def loadModel(self, url='https://drive.google.com/uc?id=1971Xk5RwedbudGgTIrGAL4F7Aifu7id1'):
-
+        
         model = self.InceptionResNetV2()
 
         self.file_weight = self.__FileFolder+'/weights/facenet_weights.h5'
 
         if os.path.isfile(self.file_weight) != True:
-            print("facenet_weights.h5 will be downloaded...")
+            print("facenet_weights.h5 will be downloaded..." + url)
 
             gdown.download(url, self.file_weight, quiet=False)
 
@@ -1019,7 +1019,7 @@ class DlibDetector:
 
         import dlib  # this requirement is not a must that's why imported here
         self.file_weights = self.__FileFolder + \
-            '\weights\shape_predictor_5_face_landmarks.dat'
+            '/weights/shape_predictor_5_face_landmarks.dat'
         # print(os.path.isfile(self.file_weights))
         # exit(0)
         # check required file exists in the home/.deepface/weights folder

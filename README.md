@@ -15,3 +15,6 @@ pip install opencv-python
 pip install opencv-contrib-python
 
 # to visual code support intelisense should install ext: pylance then choose python 3.7 in bottom left status bar
+
+#deedface
+https://github.com/serengil/deepface.git
