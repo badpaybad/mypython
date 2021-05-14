@@ -1075,7 +1075,7 @@ class DlibDetector:
                 bottom = d.bottom()
                 detected_face = imgInput[top:bottom, left:right]
                 detected_face_region = [left, top, right - left, bottom - top]  
-                print(detected_face_region)          
+                #print(detected_face_region)          
                 if align:
                     img_shape = sp(imgInput, detections[idx])
                     detected_face = dlib.get_face_chip(
@@ -1123,7 +1123,6 @@ class VectorCompare:
 
 currentDir = os.path.dirname(os.path.realpath(__file__))
 
-detector = DlibDetector()
 
 # multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
 # lstFace=detector.detect_face(multiface)
@@ -1139,6 +1138,38 @@ kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
 kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
 du = cv2.imread(currentDir+"/imgtest/du.png")
 
+detector = DlibDetector()
+encoderDlib = DlibResNet()
+faceNetEncoder = FaceNet()
+comparer = VectorCompare()
+
+listImgTest=[kimlien1,kimlien2,kimlien3,du]
+listImgTestLbl=["kimlien1","kimlien2","kimlien3","du"]
+
+(face_croped, region_face) = detector.detect_face(kimlien)[0]
+
+vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
+
+vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
+
+for idx,img in enumerate( listImgTest):
+    foundFaces = detector.detect_face(img)
+    for i,f in enumerate(foundFaces):
+        vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
+        distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 5)
+
+        vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
+        distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 5)
+        print("{} {} {}".format(listImgTestLbl[idx], idx,i))
+        print("{} {} distanceDlib {}".format(idx,i,distanceDlib))
+        print("{} {} distanceFnet {}".format(idx,i,distanceFnet))
+        cv2.imshow("",f[0])
+        cv2.waitKey(0)
+
+
+cv2.destroyAllWindows()
+
+exit(0)
 
 (f, r) = detector.detect_face(kimlien)[0]
 (f1, r1) = detector.detect_face(kimlien1)[0]
