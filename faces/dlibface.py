@@ -1160,22 +1160,22 @@ vectordu2 = faceNetEncoder.predict(
 comparer = VectorCompare()
 
 distance1 = round(np.float64(
-    comparer.findEuclideanDistance(vector, vector1)), 5)
+    comparer.findCosineDistance(vector, vector1)), 5)
 distance2 = round(np.float64(
-    comparer.findEuclideanDistance(vector, vector2)), 5)
+    comparer.findCosineDistance(vector, vector2)), 5)
 distance3 = round(np.float64(
-    comparer.findEuclideanDistance(vector, vector3)), 5)
+    comparer.findCosineDistance(vector, vector3)), 5)
 distancedu1 = round(np.float64(
-    comparer.findEuclideanDistance(vector, vectordu1)), 5)
+    comparer.findCosineDistance(vector, vectordu1)), 5)
 
 distance4 = round(np.float64(
-    comparer.findEuclideanDistance(vector4, vector5)), 5)
+    comparer.findCosineDistance(vector4, vector5)), 5)
 distance5 = round(np.float64(
-    comparer.findEuclideanDistance(vector4, vector6)), 5)
+    comparer.findCosineDistance(vector4, vector6)), 5)
 distance6 = round(np.float64(
-    comparer.findEuclideanDistance(vector4, vector7)), 5)
+    comparer.findCosineDistance(vector4, vector7)), 5)
 distancedu2 = round(np.float64(
-    comparer.findEuclideanDistance(vector4, vectordu2)), 5)
+    comparer.findCosineDistance(vector4, vectordu2)), 5)
 
 print("Distance1")
 print(distance1)
@@ -1194,5 +1194,26 @@ print("Distance6")
 print(distance6)
 print("distancedu2")
 print(distancedu2)
+
+cv2.imshow("f0 - Ogininal - ", f)
+cv2.waitKey(0)
+cv2.imshow("Dlib - Distance1 - "+str(distance1) , f1)
+cv2.waitKey(0)
+cv2.imshow("Dlib - Distance2 - "+str(distance2), f2)
+cv2.waitKey(0)
+cv2.imshow("Dlib - Distance3 - "+str(distance3), f3)
+cv2.waitKey(0)
+cv2.imshow("Dlib - DistanceDu1 - "+str(distancedu1), fdu)
+cv2.waitKey(0)
+
+cv2.waitKey(0)
+cv2.imshow("FaceNet - Distance4 - "+str(distance4) , f1)
+cv2.waitKey(0)
+cv2.imshow("FaceNet - Distance5 - "+str(distance5), f2)
+cv2.waitKey(0)
+cv2.imshow("FaceNet - Distance6 - "+str(distance6), f3)
+cv2.waitKey(0)
+cv2.imshow("FaceNet - DistanceDu2 - "+str(distancedu2),  fdu)
+cv2.waitKey(0)
 
 cv2.destroyAllWindows()
