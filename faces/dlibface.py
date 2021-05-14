@@ -1047,35 +1047,43 @@ class DlibDetector:
         self.detector = detector
         pass
 
-    def detect_face(self, kimlien, align=True):
+    def detect_face(self, imgInput, align=True):
+        """[summary]
 
+        Args:
+            imgInput ([type]): [cv2.imread]
+            align (bool, optional): [description]. Defaults to True.
+
+        Returns:
+            [type]: [List of tuple]
+        """
         import dlib  # this requirement is not a must that's why imported here
         detector = self.detector
         sp = detector["sp"]
-
-        detected_face = None
-        img_region = [0, 0, kimlien.shape[0], kimlien.shape[1]]
+        
+        #img_region = [0, 0, imgInput.shape[0], imgInput.shape[1]]
 
         face_detector = detector["face_detector"]
-        detections = face_detector(kimlien, 1)
-
+        detections = face_detector(imgInput, 1)
+        listDetected=[]
+        
         if len(detections) > 0:
-
-            for idx, d in enumerate(detections):
+            for idx, d in enumerate(detections):                
                 left = d.left()
                 right = d.right()
                 top = d.top()
                 bottom = d.bottom()
-                detected_face = kimlien[top:bottom, left:right]
-                img_region = [left, top, right - left, bottom - top]
-                break  # get the first one
+                detected_face = imgInput[top:bottom, left:right]
+                detected_face_region = [left, top, right - left, bottom - top]  
+                print(detected_face_region)          
+                if align:
+                    img_shape = sp(imgInput, detections[idx])
+                    detected_face = dlib.get_face_chip(
+                        imgInput, img_shape, size=detected_face.shape[0])
 
-            if align:
-                img_shape = sp(kimlien, detections[0])
-                detected_face = dlib.get_face_chip(
-                    kimlien, img_shape, size=detected_face.shape[0])
+                listDetected.append((detected_face, detected_face_region))
 
-        return detected_face, img_region
+        return listDetected
 
     def normalize_face(self,img, w, h):
         img = cv2.resize(img, (w, h))
@@ -1117,6 +1125,14 @@ currentDir = os.path.dirname(os.path.realpath(__file__))
 
 detector = DlibDetector()
 
+# multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
+# lstFace=detector.detect_face(multiface)
+# for f in lstFace:
+#     cv2.imshow("face found", f[0])
+#     cv2.waitKey(0)
+#     pass
+# exit(0)
+
 kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
 kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
 kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
@@ -1124,11 +1140,11 @@ kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
 du = cv2.imread(currentDir+"/imgtest/du.png")
 
 
-(f, r) = detector.detect_face(kimlien)
-(f1, r1) = detector.detect_face(kimlien1)
-(f2, r2) = detector.detect_face(kimlien2)
-(f3, r3) = detector.detect_face(kimlien3)
-(fdu, rdu) = detector.detect_face(du)
+(f, r) = detector.detect_face(kimlien)[0]
+(f1, r1) = detector.detect_face(kimlien1)[0]
+(f2, r2) = detector.detect_face(kimlien2)[0]
+(f3, r3) = detector.detect_face(kimlien3)[0]
+(fdu, rdu) = detector.detect_face(du)[0]
 
 # print(f)
 # print(r)
