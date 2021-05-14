@@ -138,3 +138,9 @@ tensorflowlearning/detectobject/data.zip
 /tensorflowlearning/trained_model
 /tensorflowlearning/detectobject/data
 /tensorflowlearning/detectobject/data.zip
+/faces/weights/dlib_face_recognition_resnet_model_v1.dat
+/faces/weights/facenet_weights.h5
+/faces/weights/shape_predictor_5_face_landmarks.dat
+/tensorflowlearning/trained_model_gpu1
+/tensorflowlearning/trained_model
+/tensorflowlearning/trained_model_cpu
