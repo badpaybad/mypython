@@ -133,3 +133,8 @@ duFace_*.jpg
 input_*.jpg
 *.bin
 /result/*
+tensorflowlearning/detectobject/data.zip
+/tensorflowlearning/trained_model_cpu
+/tensorflowlearning/trained_model
+/tensorflowlearning/detectobject/data
+/tensorflowlearning/detectobject/data.zip

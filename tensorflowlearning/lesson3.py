@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tensorflow import keras
 
-
+# https://keras.io/api/applications/
+# https://machinelearningmastery.com/how-to-perform-object-detection-with-yolov3-in-keras/
+# https://keras.io/examples/vision/retinanet/
 (train_images, train_labels), (test_images,
                                test_labels) = tf.keras.datasets.fashion_mnist.load_data()
 
@@ -30,12 +32,12 @@ test_images = test_images/255
 
 # pass
 
-folderModel=os.path.join(os.getcwd(),"trained_model")
+folderModel = os.path.join(os.getcwd(), "trained_model")
 
-if os.path.exists( folderModel)==False:
-    
+if os.path.exists(folderModel) == False:
+
     model = tf.keras.models.Sequential([
-        tf.keras.layers.Conv2D(filters=64, kernel_size=(
+        tf.keras.layers.Conv2D(filters=128, kernel_size=(
             3, 3), activation=tf.nn.relu, input_shape=(28, 28, 1)),
         tf.keras.layers.MaxPooling2D(pool_size=(2, 2)),
 
@@ -46,15 +48,15 @@ if os.path.exists( folderModel)==False:
         tf.keras.layers.Flatten(input_shape=(28, 28)),
 
         tf.keras.layers.Dense(units=128, activation=tf.nn.relu),
-        tf.keras.layers.Dropout(rate=0.2),
+        tf.keras.layers.Dropout(rate=0.1),
         tf.keras.layers.Dense(units=10, activation=tf.nn.softmax)
     ])
 
     model.compile(optimizer='adam',
-            loss=tf.keras.losses.sparse_categorical_crossentropy)
+                  loss=tf.keras.losses.sparse_categorical_crossentropy)
 
-    model.fit(train_images, train_labels, batch_size=16, epochs=3, use_multiprocessing=True,
-        workers=8, validation_data=(test_images, test_labels))
+    model.fit(train_images, train_labels, batch_size=600, epochs=100, use_multiprocessing=True,
+              workers=12, validation_data=(test_images, test_labels))
 
     print("Evaluate")
     #model.evaluate(test_images, test_labels)
@@ -65,28 +67,29 @@ if os.path.exists( folderModel)==False:
         pass
     """
     model.save(folderModel)
-else :
-    model=keras.models.load_model(folderModel)
+else:
+    model = keras.models.load_model(folderModel)
 
 
 def rgb2gray(rgb):
-    return np.dot(rgb[...,:3], [0.2989, 0.5870, 0.1140])
+    return np.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
 
-imgTest= plt.imread("6.jpg")
 
-imgTest= rgb2gray(imgTest)
+imgTest = plt.imread("2.1.jpg")
+
+imgTest = rgb2gray(imgTest)
 
 print(test_images[0].shape)
 print(imgTest.shape)
 
-imgTest=imgTest.reshape( test_images[0].shape)
+imgTest = imgTest.reshape(test_images[0].shape)
 
 # #img from mnist by idx
-# idxImgToTest=0
+# idxImgToTest=4
 # imgTest=test_images[idxImgToTest]
-# print("test_label idx: {}".format(idxImgToTest))
-# print("test_label: {}".format(test_labels[idxImgToTest]))
-print("index must be:2: {}".format(np.argmax([1,2,9,3,4,5])))
+#print("test_label idx: {}".format(idxImgToTest))
+#print("test_label: {}".format(test_labels[idxImgToTest]))
+#print("index must be:2: {}".format(np.argmax([1,2,9,3,4,5])))
 
 plt.figure()
 plt.imshow(imgTest)
@@ -94,7 +97,7 @@ plt.colorbar()
 plt.grid(False)
 plt.show()
 
-imgTestNdims=np.expand_dims(imgTest, 0)
+imgTestNdims = np.expand_dims(imgTest, 0)
 
 print(imgTestNdims.shape)
 
@@ -103,15 +106,15 @@ r = model.predict(imgTestNdims)
 print("\r\nAll: ")
 print(r[0])
 
-lblPredicted=np.argmax(r[0])
+lblPredicted = np.argmax(r[0])
 
-idxLblPredicted =-1
-idxCounter=0
+idxLblPredicted = -1
+idxCounter = 0
 for x in test_labels:
-    if x==lblPredicted:
-        idxLblPredicted=idxCounter
+    if x == lblPredicted:
+        idxLblPredicted = idxCounter
         break
-    idxCounter=idxCounter+1
+    idxCounter = idxCounter+1
 
 print("lable prediected idx: {}".format(idxLblPredicted))
 print("lable predicted: {}".format(lblPredicted))
