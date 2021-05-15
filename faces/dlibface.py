@@ -1,3 +1,4 @@
+#ref: https://github.com/serengil/deepface.git
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import add
 from tensorflow.keras.layers import MaxPooling2D
@@ -36,6 +37,9 @@ elif tf_version == 2:
     from tensorflow.keras.applications.imagenet_utils import preprocess_input
     from tensorflow.keras.preprocessing import image
 
+class DlibMetaData:
+    def __init__(self):
+        self.input_shape = [[1, 150, 150, 3]]
 
 class DlibResNet:
 
@@ -94,7 +98,6 @@ class DlibResNet:
         img_representation = np.expand_dims(img_representation, axis=0)
 
         return img_representation
-
 
 class FaceNet:
     def __init__(self):
@@ -1005,12 +1008,6 @@ class FaceNet:
     def predict(self, img_aligned):
         return self.__model.predict(img_aligned)
         pass
-
-
-class DlibMetaData:
-    def __init__(self):
-        self.input_shape = [[1, 150, 150, 3]]
-
 
 class DlibDetector:
     def __init__(self):
