@@ -1134,14 +1134,16 @@ kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
 kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
 kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
 du = cv2.imread(currentDir+"/imgtest/du.png")
+multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
+
 
 detector = DlibDetector()
 encoderDlib = DlibResNet()
 faceNetEncoder = FaceNet()
 comparer = VectorCompare()
 
-listImgTest=[kimlien1,kimlien2,kimlien3,du]
-listImgTestLbl=["kimlien1","kimlien2","kimlien3","du"]
+listImgTest=[kimlien1,kimlien2,kimlien3,du,multiface]
+listImgTestLbl=["kimlien1","kimlien2","kimlien3","du","multiface"]
 
 (face_croped, region_face) = detector.detect_face(kimlien)[0]
 
