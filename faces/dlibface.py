@@ -1057,7 +1057,8 @@ class DlibDetector:
         import dlib  # this requirement is not a must that's why imported here
         detector = self.detector
         sp = detector["sp"]
-        
+        #print(sp)
+        #exit(0)
         #img_region = [0, 0, imgInput.shape[0], imgInput.shape[1]]
 
         face_detector = detector["face_detector"]
@@ -1074,7 +1075,10 @@ class DlibDetector:
                 detected_face_region = [left, top, right - left, bottom - top]  
                 #print(detected_face_region)          
                 if align:
-                    img_shape = sp(imgInput, detections[idx])
+                    img_shape = sp(imgInput, d)
+                    #print("img_shape")
+                    #print(img_shape)
+
                     detected_face = dlib.get_face_chip(
                         imgInput, img_shape, size=detected_face.shape[0])
 
