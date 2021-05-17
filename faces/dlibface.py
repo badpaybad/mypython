@@ -1167,11 +1167,18 @@ class UnitTest:
                 vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
                 distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 3)
                 print("{} {} {}".format(listImgTestLbl[idx], idx,i))
-                print("{} {} distanceDlib {}".format(idx,i,distanceDlib))
+                print("{} {} distanceDlib {}".format(idx,i,distanceDlib))                
                 print("{} {} distanceFnet {}".format(idx,i,distanceFnet))
+
+                dx0=f[1][0]
+                dy0=f[1][1]
+                dx1=f[1][0]+f[1][2]
+                dy1=f[1][1]+f[1][3]
+                cv2.rectangle(img,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
                 resizeToSeeDetail=img
                 if img.shape[0]<600:
-                    resizeToSeeDetail = cv2.resize(img,(600,600))
+                    resizeToSeeDetail = cv2.resize(img,(600,int( 600*img.shape[0]/img.shape[1])))
 
                 imgw=f[0].shape[0]
                 imgh=f[0].shape[1]
