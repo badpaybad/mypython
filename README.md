@@ -18,3 +18,6 @@ pip install opencv-contrib-python
 
 #deedface
 https://github.com/serengil/deepface.git
+
+
+https://keras.io/examples/vision/retinanet/
