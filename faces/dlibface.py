@@ -1122,148 +1122,174 @@ class VectorCompare:
         return x / np.sqrt(np.sum(np.multiply(x, x)))
 
 
-currentDir = os.path.dirname(os.path.realpath(__file__))
+class UnitTest:
+
+    def Run(self):
+        currentDir = os.path.dirname(os.path.realpath(__file__))
 
 
-# multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
-# lstFace=detector.detect_face(multiface)
-# for f in lstFace:
-#     cv2.imshow("face found", f[0])
-#     cv2.waitKey(0)
-#     pass
-# exit(0)
+        # multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
+        # lstFace=detector.detect_face(multiface)
+        # for f in lstFace:
+        #     cv2.imshow("face found", f[0])
+        #     cv2.waitKey(0)
+        #     pass
+        # exit(0)
 
-kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
-kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
-kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
-kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
-du = cv2.imread(currentDir+"/imgtest/du.png")
-multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
+        kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
+        kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
+        kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
+        kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
+        du = cv2.imread(currentDir+"/imgtest/du.png")
+        multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
 
 
-detector = DlibDetector()
-encoderDlib = DlibResNet()
-faceNetEncoder = FaceNet()
-comparer = VectorCompare()
+        detector = DlibDetector()
+        encoderDlib = DlibResNet()
+        faceNetEncoder = FaceNet()
+        comparer = VectorCompare()
 
-listImgTest=[kimlien1,kimlien2,kimlien3,du,multiface]
-listImgTestLbl=["kimlien1","kimlien2","kimlien3","du","multiface"]
+        listImgTest=[kimlien1,kimlien2,kimlien3,du,multiface]
+        listImgTestLbl=["kimlien1","kimlien2","kimlien3","du","multiface"]
 
-(face_croped, region_face) = detector.detect_face(kimlien)[0]
+        (face_croped, region_face) = detector.detect_face(kimlien)[0]
 
-vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
+        vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
 
-vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
+        vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
 
-for idx,img in enumerate( listImgTest):
-    foundFaces = detector.detect_face(img)
-    for i,f in enumerate(foundFaces):
-        vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
-        distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 5)
+        for idx,img in enumerate( listImgTest):
+            foundFaces = detector.detect_face(img)
+            for i,f in enumerate(foundFaces):
+                vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
+                distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 3)
 
-        vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
-        distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 5)
-        print("{} {} {}".format(listImgTestLbl[idx], idx,i))
-        print("{} {} distanceDlib {}".format(idx,i,distanceDlib))
-        print("{} {} distanceFnet {}".format(idx,i,distanceFnet))
-        cv2.imshow("",f[0])
+                vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
+                distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 3)
+                print("{} {} {}".format(listImgTestLbl[idx], idx,i))
+                print("{} {} distanceDlib {}".format(idx,i,distanceDlib))
+                print("{} {} distanceFnet {}".format(idx,i,distanceFnet))
+                resizeToSeeDetail=img
+                if img.shape[0]<600:
+                    resizeToSeeDetail = cv2.resize(img,(600,600))
+
+                imgw=f[0].shape[0]
+                imgh=f[0].shape[1]
+                resizeToSeeDetail[0:imgw,0:imgh,:] = f[0][0:imgw,0:imgh,:]
+
+                cv2.putText(resizeToSeeDetail, "{}".format(listImgTestLbl[idx])
+                ,(0,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "dlib: {} fnet:{}".format(distanceDlib,distanceFnet)
+                ,(0,70), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "size: {}".format(f[0].shape)
+                ,(0,110), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "region: {}".format(f[1])
+                ,(0,140), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+
+                cv2.imshow("",resizeToSeeDetail)
+                cv2.waitKey(0)
+
+
+        cv2.destroyAllWindows()
+
+        exit(0)
+
+        (f, r) = detector.detect_face(kimlien)[0]
+        (f1, r1) = detector.detect_face(kimlien1)[0]
+        (f2, r2) = detector.detect_face(kimlien2)[0]
+        (f3, r3) = detector.detect_face(kimlien3)[0]
+        (fdu, rdu) = detector.detect_face(du)[0]
+
+        # print(f)
+        # print(r)
+        # faceCrop = kimlien[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]
+        # cv2.imshow("", f)
+        # cv2.waitKey(0)
+
+        encoder = DlibResNet()
+
+        vector = encoder.predict(detector.normalize_face(f, 150, 150))[0].tolist()
+        vector1 = encoder.predict(detector.normalize_face(f1, 150, 150))[0].tolist()
+        vector2 = encoder.predict(detector.normalize_face(f2, 150, 150))[0].tolist()
+        vector3 = encoder.predict(detector.normalize_face(f3, 150, 150))[0].tolist()
+        vectordu1 = encoder.predict(detector.normalize_face(fdu, 150, 150))[0].tolist()
+
+        faceNetEncoder = FaceNet().loadModel()
+
+        vector4 = faceNetEncoder.predict(
+            detector.normalize_face(f, 160, 160))[0].tolist()
+        vector5 = faceNetEncoder.predict(
+            detector.normalize_face(f1, 160, 160))[0].tolist()
+        vector6 = faceNetEncoder.predict(
+            detector.normalize_face(f2, 160, 160))[0].tolist()
+        vector7 = faceNetEncoder.predict(
+            detector.normalize_face(f3, 160, 160))[0].tolist()
+        vectordu2 = faceNetEncoder.predict(
+            detector.normalize_face(fdu, 160, 160))[0].tolist()
+
+        comparer = VectorCompare()
+
+        distance1 = round(np.float64(
+            comparer.findCosineDistance(vector, vector1)), 5)
+        distance2 = round(np.float64(
+            comparer.findCosineDistance(vector, vector2)), 5)
+        distance3 = round(np.float64(
+            comparer.findCosineDistance(vector, vector3)), 5)
+        distancedu1 = round(np.float64(
+            comparer.findCosineDistance(vector, vectordu1)), 5)
+
+        distance4 = round(np.float64(
+            comparer.findCosineDistance(vector4, vector5)), 5)
+        distance5 = round(np.float64(
+            comparer.findCosineDistance(vector4, vector6)), 5)
+        distance6 = round(np.float64(
+            comparer.findCosineDistance(vector4, vector7)), 5)
+        distancedu2 = round(np.float64(
+            comparer.findCosineDistance(vector4, vectordu2)), 5)
+
+        print("Distance1")
+        print(distance1)
+        print("Distance2")
+        print(distance2)
+        print("Distance3")
+        print(distance3)
+        print("distancedu1")
+        print(distancedu1)
+
+        print("Distance4")
+        print(distance4)
+        print("Distance5")
+        print(distance5)
+        print("Distance6")
+        print(distance6)
+        print("distancedu2")
+        print(distancedu2)
+
+        cv2.imshow("f0 - Ogininal - ", f)
+        cv2.waitKey(0)
+        cv2.imshow("Dlib - Distance1 - "+str(distance1) , f1)
+        cv2.waitKey(0)
+        cv2.imshow("Dlib - Distance2 - "+str(distance2), f2)
+        cv2.waitKey(0)
+        cv2.imshow("Dlib - Distance3 - "+str(distance3), f3)
+        cv2.waitKey(0)
+        cv2.imshow("Dlib - DistanceDu1 - "+str(distancedu1), fdu)
         cv2.waitKey(0)
 
+        cv2.waitKey(0)
+        cv2.imshow("FaceNet - Distance4 - "+str(distance4) , f1)
+        cv2.waitKey(0)
+        cv2.imshow("FaceNet - Distance5 - "+str(distance5), f2)
+        cv2.waitKey(0)
+        cv2.imshow("FaceNet - Distance6 - "+str(distance6), f3)
+        cv2.waitKey(0)
+        cv2.imshow("FaceNet - DistanceDu2 - "+str(distancedu2),  fdu)
+        cv2.waitKey(0)
 
-cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
-exit(0)
 
-(f, r) = detector.detect_face(kimlien)[0]
-(f1, r1) = detector.detect_face(kimlien1)[0]
-(f2, r2) = detector.detect_face(kimlien2)[0]
-(f3, r3) = detector.detect_face(kimlien3)[0]
-(fdu, rdu) = detector.detect_face(du)[0]
-
-# print(f)
-# print(r)
-# faceCrop = kimlien[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]
-# cv2.imshow("", f)
-# cv2.waitKey(0)
-
-encoder = DlibResNet()
-
-vector = encoder.predict(detector.normalize_face(f, 150, 150))[0].tolist()
-vector1 = encoder.predict(detector.normalize_face(f1, 150, 150))[0].tolist()
-vector2 = encoder.predict(detector.normalize_face(f2, 150, 150))[0].tolist()
-vector3 = encoder.predict(detector.normalize_face(f3, 150, 150))[0].tolist()
-vectordu1 = encoder.predict(detector.normalize_face(fdu, 150, 150))[0].tolist()
-
-faceNetEncoder = FaceNet().loadModel()
-
-vector4 = faceNetEncoder.predict(
-    detector.normalize_face(f, 160, 160))[0].tolist()
-vector5 = faceNetEncoder.predict(
-    detector.normalize_face(f1, 160, 160))[0].tolist()
-vector6 = faceNetEncoder.predict(
-    detector.normalize_face(f2, 160, 160))[0].tolist()
-vector7 = faceNetEncoder.predict(
-    detector.normalize_face(f3, 160, 160))[0].tolist()
-vectordu2 = faceNetEncoder.predict(
-    detector.normalize_face(fdu, 160, 160))[0].tolist()
-
-comparer = VectorCompare()
-
-distance1 = round(np.float64(
-    comparer.findCosineDistance(vector, vector1)), 5)
-distance2 = round(np.float64(
-    comparer.findCosineDistance(vector, vector2)), 5)
-distance3 = round(np.float64(
-    comparer.findCosineDistance(vector, vector3)), 5)
-distancedu1 = round(np.float64(
-    comparer.findCosineDistance(vector, vectordu1)), 5)
-
-distance4 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector5)), 5)
-distance5 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector6)), 5)
-distance6 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector7)), 5)
-distancedu2 = round(np.float64(
-    comparer.findCosineDistance(vector4, vectordu2)), 5)
-
-print("Distance1")
-print(distance1)
-print("Distance2")
-print(distance2)
-print("Distance3")
-print(distance3)
-print("distancedu1")
-print(distancedu1)
-
-print("Distance4")
-print(distance4)
-print("Distance5")
-print(distance5)
-print("Distance6")
-print(distance6)
-print("distancedu2")
-print(distancedu2)
-
-cv2.imshow("f0 - Ogininal - ", f)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance1 - "+str(distance1) , f1)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance2 - "+str(distance2), f2)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance3 - "+str(distance3), f3)
-cv2.waitKey(0)
-cv2.imshow("Dlib - DistanceDu1 - "+str(distancedu1), fdu)
-cv2.waitKey(0)
-
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance4 - "+str(distance4) , f1)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance5 - "+str(distance5), f2)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance6 - "+str(distance6), f3)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - DistanceDu2 - "+str(distancedu2),  fdu)
-cv2.waitKey(0)
-
-cv2.destroyAllWindows()
+UnitTest().Run()
