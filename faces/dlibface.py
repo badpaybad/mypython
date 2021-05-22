@@ -1334,13 +1334,14 @@ class CameraCapturer:
             # by frame
             ret, frame = vid.read()
             
-            foundFace = detector.detect_face(frame)
+            foundFaces = detector.detect_face(frame)
             
             cv2.putText(frame, "Press 'q' to quit"
                         ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
 
-            if(len(foundFace)>0):
-                (face_croped, region_face)=foundFace[0]
+            for foundFace in foundFaces:
+                (face_croped, region_face)=foundFace
+                
                 dx0=region_face[0]
                 dy0=region_face[1]
                 dx1=region_face[0]+region_face[2]
