@@ -995,6 +995,7 @@ class FaceNet:
         model = self.InceptionResNetV2()
 
         self.file_weight = self.__FileFolder+'/weights/facenet_weights.h5'
+        #self.file_weight = self.__FileFolder+'/weights/facenet_keras_weights.h5'
 
         if os.path.isfile(self.file_weight) != True:
             print("facenet_weights.h5 will be downloaded..." + url)
@@ -1094,7 +1095,6 @@ class DlibDetector:
         return img_pixels
         pass
 
-
 class VectorCompare:
     def __init__(self):
         pass
@@ -1121,7 +1121,6 @@ class VectorCompare:
     def l2_normalize(self, x):
         return x / np.sqrt(np.sum(np.multiply(x, x)))
 
-
 class UnitTest:
 
     def Run(self):
@@ -1143,6 +1142,8 @@ class UnitTest:
         du = cv2.imread(currentDir+"/imgtest/du.png")
         multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
 
+        MtccnDetector().detect_face(multiface)
+        exit(0)
 
         detector = DlibDetector()
         encoderDlib = DlibResNet()
@@ -1299,4 +1300,79 @@ class UnitTest:
         cv2.destroyAllWindows()
 
 
-UnitTest().Run()
+#UnitTest().Run()
+
+class CameraCapturer:
+
+    def Run(self):
+        #UnitTest().Run()
+        currentDir = os.path.dirname(os.path.realpath(__file__))
+        du = cv2.imread(currentDir+"/imgtest/du.png")
+
+        listFaceImg=[du]
+        arrVector=[]
+        arrLabel=["du"]
+
+        detector = DlibDetector()
+        encoderDlib = DlibResNet()
+        faceNetEncoder = FaceNet()
+        comparer = VectorCompare()
+
+        for f in listFaceImg:
+            ffound=detector.detect_face(f)
+            if(len(ffound)>0):
+                fcrop,rrect = ffound[0]
+                vector=encoderDlib.predict(detector.normalize_face(fcrop, 150, 150))[0].tolist()
+                arrVector.append(vector)
+
+        # define a video capture object
+        vid = cv2.VideoCapture(0)
+        
+        while(True):
+            
+            # Capture the video frame
+            # by frame
+            ret, frame = vid.read()
+            
+            foundFace = detector.detect_face(frame)
+            
+            cv2.putText(frame, "Press 'q' to quit"
+                        ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+
+            if(len(foundFace)>0):
+                (face_croped, region_face)=foundFace[0]
+                dx0=region_face[0]
+                dy0=region_face[1]
+                dx1=region_face[0]+region_face[2]
+                dy1=region_face[1]+region_face[3]
+                cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                vector=encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
+
+                resCompare=[]
+                for idx, fDec in enumerate( arrVector):
+                    distanceDlib = round(np.float64(comparer.findCosineDistance(fDec, vector)), 10)
+                    resCompare.append(distanceDlib)
+                    
+                if(len(resCompare)>0):
+                    resCompare=np.array(resCompare)
+                    minDistanceIdx = np.argmin( resCompare)
+                    minDistanceVal = resCompare[minDistanceIdx]
+                    cv2.putText(frame, "{} {}".format(arrLabel[minDistanceIdx],minDistanceVal)
+                        ,(dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+
+            # Display the resulting frame// fake video stream =))
+            cv2.imshow('frame', frame)
+            
+            # the 'q' button is set as the
+            # quitting button you may use any
+            # desired button of your choice
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        
+        # After the loop release the cap object
+        vid.release()
+        # Destroy all the windows
+        cv2.destroyAllWindows()
+
+CameraCapturer().Run()
