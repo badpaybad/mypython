@@ -22,7 +22,7 @@ url = "https://github.com/srihari-humbarwadi/datasets/releases/download/v0.1.0/d
 filename = os.path.join(os.getcwd(), "data.zip")
 keras.utils.get_file(filename, url)
 
-
+coco_lables="person\nbicycle\ncar\nmotorcycle\nairplane\nbus\ntrain\ntruck\nboat\ntraffic light\nfire hydrant\nstop sign\nparking meter\nbench\nbird\ncat\ndog\nhorse\nsheep\ncow\nelephant\nbear\nzebra\ngiraffe\nbackpack\numbrella\nhandbag\ntie\nsuitcase\nfrisbee\nskis\nsnowboard\nsports ball\nkite\nbaseball bat\nbaseball glove\nskateboard\nsurfboard\ntennis racket\nbottle\nwine glass\ncup\nfork\nknife\nspoon\nbowl\nbanana\napple\nsandwich\norange\nbroccoli\ncarrot\nhot dog\npizza\ndonut\ncake\nchair\ncouch\npotted plant\nbed\ndining table\ntoilet\ntv\nlaptop\nmouse\nremote\nkeyboard\ncell phone\nmicrowave\noven\ntoaster\nsink\nrefrigerator\nbook\nclock\nvase\nscissors\nteddy bear\nhair drier\ntoothbrush".split("\n")
 with zipfile.ZipFile("data.zip", "r") as z_fp:
     z_fp.extractall("./")
 
@@ -67,7 +67,7 @@ for sample in train_dataset.take(3):
             [x1, y1], w, h, fill=False, edgecolor=color, linewidth=linewidth
         )
         ax.add_patch(patch)       
-        text="clsid: {} idx:{}".format(class_id[idx],idx)
+        text="clsid:{} lbl: {}".format(class_id[idx], coco_lables[class_id[idx]])
         ax.text(
             x1,
             y1,
