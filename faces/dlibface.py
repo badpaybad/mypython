@@ -1334,8 +1334,11 @@ def ShowFrame(queueDisplay, queueDetected ):
             cv2.putText(frame, "Press 'q' to quit"
                 ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
 
-            if(queueDetected.qsize()>0):
-                jsonDetected= queueDetected.get()               
+            qsize =queueDetected.qsize()
+            if(qsize>0):
+                for i in range(0,qsize):
+                    jsonDetected= queueDetected.get()               
+                
                 lastDetecteds = json.loads(jsonDetected)              
                 
             print("drawing")
@@ -1464,8 +1467,8 @@ class CameraCapturer:
                     self.lastJsonDetected=json.dumps(tempJson)
                     print(self.lastJsonDetected)
                 
-                if(self.lastJsonDetected!=""):                   
-                    self._queueDetected.put(self.lastJsonDetected)       
+                    if(self.lastJsonDetected!=""):                   
+                        self._queueDetected.put(self.lastJsonDetected)       
                         
             except Exception as ex:
                 #print(ex)
