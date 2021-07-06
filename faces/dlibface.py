@@ -1331,9 +1331,9 @@ class CameraCapturer:
         
         # define a video capture object
       
-        cameraUrl = "rtsp://admin:LSCOJS@192.168.3.80:554/H.265"
-        cameraUrl = "rtsp://admin:Omt123123@192.168.3.110:554"
-        cameraUrl="rtsp://admin:Omt123123@192.168.3.109:554/Streamming/Channels/101"
+        cameraUrl = "rtsp://admin:admin@192.168.3.80:554/H.265"
+        cameraUrl = "rtsp://admin:admin@192.168.3.110:554"
+        cameraUrl="rtsp://admin:admin@192.168.3.109:554/Streamming/Channels/101"
         cameraUrl=0
 
         vid = cv2.VideoCapture(cameraUrl)
