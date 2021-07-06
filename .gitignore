@@ -145,3 +145,4 @@ tensorflowlearning/detectobject/data.zip
 /tensorflowlearning/trained_model
 /tensorflowlearning/trained_model_cpu
 faces/weights/facenet_keras_weights.h5
+faces/svm.pkl
