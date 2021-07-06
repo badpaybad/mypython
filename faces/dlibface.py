@@ -30,6 +30,8 @@ import json
 
 import threading
 from multiprocessing import Process, Queue
+import datetime
+import time
 
 import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
@@ -1297,21 +1299,25 @@ class UnitTest:
 # cv2.imshow("normalize",dlibDetector.normalize(cv2.imread("./imgtest/du.png")))
 # cv2.waitKey()
 # exit()
-def GetFrame( queue, queueDisplay, cameraUrl):
+def GetFrame( queueToDetect, queueDisplay, cameraUrl):
         
     vid = cv2.VideoCapture(cameraUrl)
-
+    lasttime=datetime.datetime.now().timestamp()
+    print("Begin get frame: "+ str(lasttime))
     while (True):
-        try:                
-        # Capture the video frame
-        # by frame
+        try:     
             ret, frame = vid.read()
 
             queueDisplay.put(frame)
-            queue.put(frame)
+            
+            x = datetime.datetime.now().timestamp()
+            if(x - lasttime>1):
+                print('put frame to detect: '+ str(x))
+                lasttime=x
+                queueToDetect.put(frame)
 
         except Exception as ex :
-            print(ex)
+            #print(ex)
             pass
 
 def ShowFrame(queueDisplay, queueDetected ):
@@ -1322,17 +1328,22 @@ def ShowFrame(queueDisplay, queueDetected ):
             cv2.putText(frame, "Press 'q' to quit"
                 ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
 
-            detected = json.loads( queueDetected.get(False))
+            if(queueDetected.qsize()>0):
+                jsonDetected= queueDetected.get()
+            
+                detecteds = json.loads(jsonDetected)
+                
+                for detected in detecteds:
+                    dx0=int(detected["dx0"])
+                    dy0=int(detected["dy0"])
+                    dx1=int(detected["dx1"])
+                    dy1=int(detected["dy1"])
 
-            dx0=int(detected["dx0"])
-            dy0=int(detected["dy0"])
-            dx1=int(detected["dx1"])
-            dy1=int(detected["dy1"])
+                    cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-            cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-            cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceIdx"],detected["minDistanceVal"], detected["svmResult"])
-                            ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                    cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceIdx"],detected["minDistanceVal"], detected["svmResult"])
+                                    ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                
 
             cv2.imshow('frame', frame)            
             # the 'q' button is set as the # quitting button you may use any # desired button of your choice
@@ -1340,17 +1351,17 @@ def ShowFrame(queueDisplay, queueDetected ):
                 break
 
         except Exception as ex:
-            print(ex)
+            #print(ex)
+            pass
     
     # Destroy all the windows
     cv2.destroyAllWindows()         
 
 class CameraCapturer:
     def __init__(self, cameraUrl) :
-        self._frameQueue = Queue()
+        self._frameQueueToDetect = Queue()
         self._frameQueueDisplay = Queue()
         self._queueDetected = Queue()
-
         self._cameraUrl=cameraUrl
                 
         self.detector = DlibDetector()
@@ -1359,7 +1370,6 @@ class CameraCapturer:
         self.comparer = VectorCompare()
         
         self.svmFaceClassifier = SvmFaceClassifier()
-
 
         self.arrVector=[]
         self.arrLabel=[]        
@@ -1373,10 +1383,13 @@ class CameraCapturer:
         self.svmResult=""
         self.minDistanceIdx = 0
         self.minDistanceVal = ""
-
+        self.minDistanceLbl=""
+        
+        self.lastJsonDetected=""
+        
         self.InitDataTest()
 
-        self._frameThread = Process(target=GetFrame, args=(self._frameQueue,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._frameThread = Process(target=GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
         self._faceThread = Process(target=ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
         
         pass
@@ -1386,47 +1399,61 @@ class CameraCapturer:
         self._faceThread.start()
         
         while(True):
-            
-            frame = self._frameQueue.get()
-            
-            foundFace = self.detector.detect_face(frame)
-            #foundFace=[]
-            #cv2.putText(frame, "Press 'q' to quit"
-            #            ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
-
-            for ffound in foundFace:
-                (face_croped, region_face)=ffound
-                self.dx0=region_face[0]
-                self.dy0=region_face[1]
-                self.dx1=region_face[0]+region_face[2]
-                self.dy1=region_face[1]+region_face[3]
-                #cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-                vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
-
-                resCompare=[]
-                for idx, fDec in enumerate( self.arrVector):
-                    distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
-                    resCompare.append(distanceDlib)
+            try:
+                tempJson=[]
                 
-                self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
+                if(self._frameQueueToDetect.qsize()>1):
+                               
+                    frame = self._frameQueueToDetect.get()
+                    print("begin detect")
+                    foundFace = self.detector.detect_face(frame)
                     
-                if(len(resCompare)>0):
-                    resCompare=np.array(resCompare)
-                    self.minDistanceIdx = np.argmin( resCompare)
-                    self.minDistanceVal =str( resCompare[self.minDistanceIdx])
-                    lbl=self.arrLabel[self.minDistanceIdx]
-                    self._queueDetected.put(json.dumps({
-                    "dx0":self.dx0,
-                    "dy0":self.dy0,
-                    "dx1":self.dx1,
-                    "dy1":self.dy1,
-                    "svmResult":self.svmResult,
-                    "minDistanceIdx":lbl ,                   
-                    "minDistanceVal":self.minDistanceVal
-                    }))
+                    for ffound in foundFace:                   
+                        
+                        (face_croped, region_face)=ffound
+                        self.dx0=region_face[0]
+                        self.dy0=region_face[1]
+                        self.dx1=region_face[0]+region_face[2]
+                        self.dy1=region_face[1]+region_face[3]
+                        
+                        vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
 
- 
+                        resCompare=[]
+                        for idx, fDec in enumerate( self.arrVector):
+                            distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                            resCompare.append(distanceDlib)
+                        
+                        self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
+                            
+                        if(len(resCompare)>0):
+                            resCompare=np.array(resCompare)
+                            self.minDistanceIdx = np.argmin( resCompare)
+                            self.minDistanceVal =str( resCompare[self.minDistanceIdx])
+                            self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
+                            tempJson.append({
+                            "dx0":self.dx0,
+                            "dy0":self.dy0,
+                            "dx1":self.dx1,
+                            "dy1":self.dy1,
+                            "svmResult":self.svmResult,
+                            "minDistanceIdx":self.minDistanceLbl ,                   
+                            "minDistanceVal":self.minDistanceVal
+                            })
+                        
+                    if(len(tempJson)>0):
+                                            
+                        self.lastJsonDetected=json.dumps(tempJson)   
+                                   
+                self._queueDetected.put(self.lastJsonDetected)       
+                        
+                        
+            except Exception as ex:
+                #print(ex)
+                pass
+            finally:
+                time.sleep(0.5)
+                pass
+    
 
     def InitDataTest(self):
         currentDir = os.path.dirname(os.path.realpath(__file__))
