@@ -26,6 +26,10 @@ import matplotlib.pyplot as plt
 
 from sklearn.svm import SVC
 import pickle
+import json
+
+import threading
+from multiprocessing import Process, Queue
 
 import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
@@ -41,7 +45,7 @@ elif tf_version == 2:
     from tensorflow.keras.applications.imagenet_utils import preprocess_input
     from tensorflow.keras.preprocessing import image
 
-'''
+
 #want to use CPU have to uncomment bellow to disable GPU
 try:
     # Disable all GPUS
@@ -54,7 +58,7 @@ except:
     # Disable all GPUS
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     pass
-'''
+
 
 class DlibMetaData:
     def __init__(self):
@@ -1293,23 +1297,145 @@ class UnitTest:
 # cv2.imshow("normalize",dlibDetector.normalize(cv2.imread("./imgtest/du.png")))
 # cv2.waitKey()
 # exit()
+def GetFrame( queue, queueDisplay, cameraUrl):
+        
+    vid = cv2.VideoCapture(cameraUrl)
+
+    while (True):
+        try:                
+        # Capture the video frame
+        # by frame
+            ret, frame = vid.read()
+
+            queueDisplay.put(frame)
+            queue.put(frame)
+
+        except Exception as ex :
+            print(ex)
+            pass
+
+def ShowFrame(queueDisplay, queueDetected ):
+    while(True):
+        try:
+            frame = queueDisplay.get()
+
+            cv2.putText(frame, "Press 'q' to quit"
+                ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+
+            detected = json.loads( queueDetected.get(False))
+
+            dx0=int(detected["dx0"])
+            dy0=int(detected["dy0"])
+            dx1=int(detected["dx1"])
+            dy1=int(detected["dy1"])
+
+            cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+            cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceIdx"],detected["minDistanceVal"], detected["svmResult"])
+                            ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+
+            cv2.imshow('frame', frame)            
+            # the 'q' button is set as the # quitting button you may use any # desired button of your choice
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        except Exception as ex:
+            print(ex)
+    
+    # Destroy all the windows
+    cv2.destroyAllWindows()         
 
 class CameraCapturer:
+    def __init__(self, cameraUrl) :
+        self._frameQueue = Queue()
+        self._frameQueueDisplay = Queue()
+        self._queueDetected = Queue()
 
-    def Run(self, actionCallback=None):
-        #UnitTest().Run()
+        self._cameraUrl=cameraUrl
+                
+        self.detector = DlibDetector()
+        self.encoderDlib = DlibResNet()
+        self.faceNetEncoder = FaceNet()
+        self.comparer = VectorCompare()
+        
+        self.svmFaceClassifier = SvmFaceClassifier()
+
+
+        self.arrVector=[]
+        self.arrLabel=[]        
+
+        self.dx0=0
+        self.dy0=0
+        
+        self.dx1=0
+        self.dy1=0
+
+        self.svmResult=""
+        self.minDistanceIdx = 0
+        self.minDistanceVal = ""
+
+        self.InitDataTest()
+
+        self._frameThread = Process(target=GetFrame, args=(self._frameQueue,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._faceThread = Process(target=ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
+        
+        pass
+
+    def Run(self):
+        self._frameThread.start()
+        self._faceThread.start()
+        
+        while(True):
+            
+            frame = self._frameQueue.get()
+            
+            foundFace = self.detector.detect_face(frame)
+            #foundFace=[]
+            #cv2.putText(frame, "Press 'q' to quit"
+            #            ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+
+            for ffound in foundFace:
+                (face_croped, region_face)=ffound
+                self.dx0=region_face[0]
+                self.dy0=region_face[1]
+                self.dx1=region_face[0]+region_face[2]
+                self.dy1=region_face[1]+region_face[3]
+                #cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
+
+                resCompare=[]
+                for idx, fDec in enumerate( self.arrVector):
+                    distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                    resCompare.append(distanceDlib)
+                
+                self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
+                    
+                if(len(resCompare)>0):
+                    resCompare=np.array(resCompare)
+                    self.minDistanceIdx = np.argmin( resCompare)
+                    self.minDistanceVal =str( resCompare[self.minDistanceIdx])
+                    lbl=self.arrLabel[self.minDistanceIdx]
+                    self._queueDetected.put(json.dumps({
+                    "dx0":self.dx0,
+                    "dy0":self.dy0,
+                    "dx1":self.dx1,
+                    "dy1":self.dy1,
+                    "svmResult":self.svmResult,
+                    "minDistanceIdx":lbl ,                   
+                    "minDistanceVal":self.minDistanceVal
+                    }))
+
+ 
+
+    def InitDataTest(self):
         currentDir = os.path.dirname(os.path.realpath(__file__))
         du = cv2.imread(currentDir+"/imgtest/du.png")
         lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
 
         listFaceImg=[du,lien]
-        arrVector=[]
-        arrLabel=["du","lien"]
-
-        detector = DlibDetector()
-        encoderDlib = DlibResNet()
-        faceNetEncoder = FaceNet()
-        comparer = VectorCompare()
+        self.arrVector=[]
+        self.arrLabel=["du","lien"]
 
         # init data
         for f in listFaceImg:
@@ -1323,11 +1449,11 @@ class CameraCapturer:
             # distanceDlib = round(np.float64(comparer.findEuclideanDistance(dupython, ducsharp)), 10)
             # print(distanceDlib)
 
-            ffound=detector.detect_face(f)
-            print(len(ffound))
+            ffound=self.detector.detect_face(f)
+            
             if(len(ffound)>0):
                 fcrop,rrect = ffound[0]
-                xxxVector =encoderDlib.predict(detector.normalize_face(fcrop, 150, 150)) #[[]]
+                xxxVector =self.encoderDlib.predict(self.detector.normalize_face(fcrop, 150, 150)) #[[]]
                 # for x in xxxVector:
 
                 #     f = open("demofile21.txt", "a")
@@ -1337,76 +1463,18 @@ class CameraCapturer:
                 #     f.close()
                 # exit()
                 vector=xxxVector[0].tolist()#[[]]
-                arrVector.append(vector)                
+                self.arrVector.append(vector)                
         
-        svmFaceClassifier = SvmFaceClassifier()
-        svmFaceClassifier.Train(arrVector, arrLabel)
-        svmFaceClassifier.SaveModel()
+        self.svmFaceClassifier.Train(self.arrVector, self.arrLabel)
+        self.svmFaceClassifier.SaveModel()
 
-        
-        # define a video capture object
-      
-        cameraUrl = "rtsp://admin:admin@192.168.3.80:554/H.265"
-        cameraUrl = "rtsp://admin:admin@192.168.3.110:554"
-        cameraUrl="rtsp://admin:admin@192.168.3.109:554/Streamming/Channels/101"
-        cameraUrl=0
+        pass
 
-        vid = cv2.VideoCapture(cameraUrl)
-        
-        while(True):
-            
-            # Capture the video frame
-            # by frame
-            ret, frame = vid.read()
-            
-            foundFace = detector.detect_face(frame)
-            #foundFace=[]
-            print(len(foundFace))
-            cv2.putText(frame, "Press 'q' to quit"
-                        ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
 
-            for ffound in foundFace:
-                (face_croped, region_face)=ffound
-                dx0=region_face[0]
-                dy0=region_face[1]
-                dx1=region_face[0]+region_face[2]
-                dy1=region_face[1]+region_face[3]
-                cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-                vector=encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
-                              
-                resCompare=[]
-                for idx, fDec in enumerate( arrVector):
-                    distanceDlib = round(np.float64(comparer.findCosineDistance(fDec, vector)), 10)
-                    resCompare.append(distanceDlib)
+cameraCap= CameraCapturer(0)
 
-                
-                svmResult= svmFaceClassifier.Predict([vector])
-                    
-                if(len(resCompare)>0):
-                    resCompare=np.array(resCompare)
-                    minDistanceIdx = np.argmin( resCompare)
-                    minDistanceVal = resCompare[minDistanceIdx]
-                    cv2.putText(frame, "{} {} svm:{}".format(arrLabel[minDistanceIdx],minDistanceVal, svmResult)
-                        ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
-
-            #if(actionCallback!= None):
-            #    actionCallback(frame)
-            #else
-            # Display the resulting frame// fake video stream =))
-
-            #frame= cv2.Canny(frame,100,100)
-
-            cv2.imshow('frame', frame)            
-            # the 'q' button is set as the
-            # quitting button you may use any
-            # desired button of your choice
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-        
-        # After the loop release the cap object
-        vid.release()
-        # Destroy all the windows
-        cv2.destroyAllWindows()
-
-CameraCapturer().Run()
+if __name__ == '__main__':
+    cameraCap.Run()
+    cameraCap._frameThread.join()
+    cameraCap._faceThread.join()
