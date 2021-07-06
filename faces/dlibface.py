@@ -1319,8 +1319,14 @@ def GetFrame( queueToDetect, queueDisplay, cameraUrl):
         except Exception as ex :
             #print(ex)
             pass
+        finally:
+            #time.sleep(0.0001)
+            pass
 
 def ShowFrame(queueDisplay, queueDetected ):
+    
+    lastDetecteds=[]
+    
     while(True):
         try:
             frame = queueDisplay.get()
@@ -1329,21 +1335,23 @@ def ShowFrame(queueDisplay, queueDetected ):
                 ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
 
             if(queueDetected.qsize()>0):
-                jsonDetected= queueDetected.get()
+                jsonDetected= queueDetected.get()               
+                lastDetecteds = json.loads(jsonDetected)              
+                
+            print("drawing")
+            print(lastDetecteds)
             
-                detecteds = json.loads(jsonDetected)
-                
-                for detected in detecteds:
-                    dx0=int(detected["dx0"])
-                    dy0=int(detected["dy0"])
-                    dx1=int(detected["dx1"])
-                    dy1=int(detected["dy1"])
+            for detected in lastDetecteds:
+                dx0=int(detected["dx0"])
+                dy0=int(detected["dy0"])
+                dx1=int(detected["dx1"])
+                dy1=int(detected["dy1"])
 
-                    cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+                cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-                    cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceIdx"],detected["minDistanceVal"], detected["svmResult"])
-                                    ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
-                
+                cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"])
+                                ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+            
 
             cv2.imshow('frame', frame)            
             # the 'q' button is set as the # quitting button you may use any # desired button of your choice
@@ -1352,6 +1360,9 @@ def ShowFrame(queueDisplay, queueDetected ):
 
         except Exception as ex:
             #print(ex)
+            pass
+        finally:
+            #time.sleep(0.0001)
             pass
     
     # Destroy all the windows
@@ -1400,6 +1411,10 @@ class CameraCapturer:
         
         while(True):
             try:
+                
+                if(self.lastJsonDetected!=""):                   
+                    self._queueDetected.put(self.lastJsonDetected)    
+                    
                 tempJson=[]
                 
                 if(self._frameQueueToDetect.qsize()>1):
@@ -1426,32 +1441,37 @@ class CameraCapturer:
                         self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
                             
                         if(len(resCompare)>0):
+                            print("comparing")
                             resCompare=np.array(resCompare)
                             self.minDistanceIdx = np.argmin( resCompare)
                             self.minDistanceVal =str( resCompare[self.minDistanceIdx])
                             self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
+                           
                             tempJson.append({
                             "dx0":self.dx0,
                             "dy0":self.dy0,
                             "dx1":self.dx1,
                             "dy1":self.dy1,
                             "svmResult":self.svmResult,
-                            "minDistanceIdx":self.minDistanceLbl ,                   
+                            "minDistanceLbl":self.minDistanceLbl ,                   
                             "minDistanceVal":self.minDistanceVal
                             })
+                            
+                    print(str(len(tempJson)) +" detected") 
+                            
                         
-                    if(len(tempJson)>0):
-                                            
-                        self.lastJsonDetected=json.dumps(tempJson)   
-                                   
-                self._queueDetected.put(self.lastJsonDetected)       
-                        
+                if(len(tempJson)>0):             
+                    self.lastJsonDetected=json.dumps(tempJson)
+                    print(self.lastJsonDetected)
+                
+                if(self.lastJsonDetected!=""):                   
+                    self._queueDetected.put(self.lastJsonDetected)       
                         
             except Exception as ex:
                 #print(ex)
                 pass
             finally:
-                time.sleep(0.5)
+                #time.sleep(0.0001)
                 pass
     
 
