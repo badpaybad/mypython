@@ -41,6 +41,21 @@ elif tf_version == 2:
     from tensorflow.keras.applications.imagenet_utils import preprocess_input
     from tensorflow.keras.preprocessing import image
 
+'''
+#want to use CPU have to uncomment bellow to disable GPU
+try:
+    # Disable all GPUS
+    tf.config.set_visible_devices([], 'GPU')
+    visible_devices = tf.config.get_visible_devices()
+    for device in visible_devices:
+        assert device.device_type != 'GPU'
+except:
+    # Invalid device or cannot modify virtual devices once initialized.
+    # Disable all GPUS
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    pass
+'''
+
 class DlibMetaData:
     def __init__(self):
         self.input_shape = [[1, 150, 150, 3]]
