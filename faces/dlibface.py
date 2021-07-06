@@ -1,4 +1,5 @@
 #ref: https://github.com/serengil/deepface.git
+from ast import dump
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import add
 from tensorflow.keras.layers import MaxPooling2D
@@ -20,8 +21,15 @@ import cv2
 import gdown
 import numpy as np
 from pathlib import Path
-
+import json
 import matplotlib.pyplot as plt
+
+from sklearn.svm import SVC
+import pickle
+import json
+
+import threading
+from multiprocessing import Process, Queue
 
 import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
@@ -36,6 +44,21 @@ elif tf_version == 2:
     from tensorflow.keras.preprocessing.image import load_img, save_img, img_to_array
     from tensorflow.keras.applications.imagenet_utils import preprocess_input
     from tensorflow.keras.preprocessing import image
+
+
+#want to use CPU have to uncomment bellow to disable GPU
+try:
+    # Disable all GPUS
+    tf.config.set_visible_devices([], 'GPU')
+    visible_devices = tf.config.get_visible_devices()
+    for device in visible_devices:
+        assert device.device_type != 'GPU'
+except:
+    # Invalid device or cannot modify virtual devices once initialized.
+    # Disable all GPUS
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    pass
+
 
 class DlibMetaData:
     def __init__(self):
@@ -995,6 +1018,7 @@ class FaceNet:
         model = self.InceptionResNetV2()
 
         self.file_weight = self.__FileFolder+'/weights/facenet_weights.h5'
+        #self.file_weight = self.__FileFolder+'/weights/facenet_keras_weights.h5'
 
         if os.path.isfile(self.file_weight) != True:
             print("facenet_weights.h5 will be downloaded..." + url)
@@ -1052,12 +1076,13 @@ class DlibDetector:
             align (bool, optional): [description]. Defaults to True.
 
         Returns:
-            [type]: [List of tuple]
+            [type]: [List of tuple(face,rect)]
         """
         import dlib  # this requirement is not a must that's why imported here
         detector = self.detector
         sp = detector["sp"]
-        
+        #print(sp)
+        #exit(0)
         #img_region = [0, 0, imgInput.shape[0], imgInput.shape[1]]
 
         face_detector = detector["face_detector"]
@@ -1074,7 +1099,10 @@ class DlibDetector:
                 detected_face_region = [left, top, right - left, bottom - top]  
                 #print(detected_face_region)          
                 if align:
-                    img_shape = sp(imgInput, detections[idx])
+                    img_shape = sp(imgInput, d)
+                    #print("img_shape")
+                    #print(img_shape)
+
                     detected_face = dlib.get_face_chip(
                         imgInput, img_shape, size=detected_face.shape[0])
 
@@ -1086,10 +1114,23 @@ class DlibDetector:
         img = cv2.resize(img, (w, h))
         img_pixels = image.img_to_array(img)
         img_pixels = np.expand_dims(img_pixels, axis=0)
+        #tf.squeeze(img_pixels)
         img_pixels /= 255  # normalize input in [0, 1]
+        #print(img_pixels.shape)
+        #print(img_pixels.ndim)
+        #print(img_pixels)
         return img_pixels
         pass
 
+    def normalize(self,image, fixed=False):
+        if fixed:
+            return (np.float32(image) - 127.5) / 127.5
+        else:
+            mean = np.mean(image)
+            std = np.std(image)
+            std_adj = np.maximum(std, 1.0 / np.sqrt(image.size))
+            y = np.multiply(np.subtract(image, mean), 1 / std_adj)
+            return y
 
 class VectorCompare:
     def __init__(self):
@@ -1117,147 +1158,323 @@ class VectorCompare:
     def l2_normalize(self, x):
         return x / np.sqrt(np.sum(np.multiply(x, x)))
 
+class SvmFaceClassifier:
+    def __init__(self, vectors=[], labels=[]):
+        self.model = SVC(kernel='linear', probability=True)
 
-currentDir = os.path.dirname(os.path.realpath(__file__))
+    def Train(self,vectors=[], labels=[]):
+        
+        self.faceVectors = vectors
+        self.faceLabels = labels        
+        self.model.fit(self.faceVectors, self.faceLabels)
 
+        pass
 
-# multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
-# lstFace=detector.detect_face(multiface)
-# for f in lstFace:
-#     cv2.imshow("face found", f[0])
-#     cv2.waitKey(0)
-#     pass
-# exit(0)
+    def SaveModel(self,modelPath=""):
 
-kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
-kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
-kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
-kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
-du = cv2.imread(currentDir+"/imgtest/du.png")
+        self.__FileFolder = os.path.dirname(os.path.realpath(__file__))
+        if(modelPath==""):
+            modelPath= self.__FileFolder+"/svm.pkl"
 
-detector = DlibDetector()
-encoderDlib = DlibResNet()
-faceNetEncoder = FaceNet()
-comparer = VectorCompare()
+        pickle.dump(self.model,open(modelPath, 'wb'))
+    
+    def LoadModel(self,modelPath="" ):
+        self.__FileFolder = os.path.dirname(os.path.realpath(__file__))
+        if(modelPath==""):
+            modelPath= self.__FileFolder+"/svm.pkl"
 
-listImgTest=[kimlien1,kimlien2,kimlien3,du]
-listImgTestLbl=["kimlien1","kimlien2","kimlien3","du"]
+        self.model = pickle.load(open(modelPath, 'rb'))
+        #result = loaded_model.score(X_test, Y_test)
+    
+    def Predict(self, vector):
+        return self.model.predict(vector)
+        pass
 
-(face_croped, region_face) = detector.detect_face(kimlien)[0]
+class UnitTest:
 
-vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
-
-vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
-
-for idx,img in enumerate( listImgTest):
-    foundFaces = detector.detect_face(img)
-    for i,f in enumerate(foundFaces):
-        vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
-        distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 5)
-
-        vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
-        distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 5)
-        print("{} {} {}".format(listImgTestLbl[idx], idx,i))
-        print("{} {} distanceDlib {}".format(idx,i,distanceDlib))
-        print("{} {} distanceFnet {}".format(idx,i,distanceFnet))
-        cv2.imshow("",f[0])
-        cv2.waitKey(0)
+    def Run(self):
+        currentDir = os.path.dirname(os.path.realpath(__file__))
 
 
-cv2.destroyAllWindows()
+        # multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
+        # lstFace=detector.detect_face(multiface)
+        # for f in lstFace:
+        #     cv2.imshow("face found", f[0])
+        #     cv2.waitKey(0)
+        #     pass
+        # exit(0)
 
-exit(0)
+        kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
+        kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
+        kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
+        kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
+        du = cv2.imread(currentDir+"/imgtest/du.png")
+        multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
 
-(f, r) = detector.detect_face(kimlien)[0]
-(f1, r1) = detector.detect_face(kimlien1)[0]
-(f2, r2) = detector.detect_face(kimlien2)[0]
-(f3, r3) = detector.detect_face(kimlien3)[0]
-(fdu, rdu) = detector.detect_face(du)[0]
+        detector = DlibDetector()
+        encoderDlib = DlibResNet()
+        faceNetEncoder = FaceNet()
+        comparer = VectorCompare()
 
-# print(f)
-# print(r)
-# faceCrop = kimlien[r[1]:r[1]+r[3], r[0]:r[0]+r[2]]
-# cv2.imshow("", f)
-# cv2.waitKey(0)
+        listImgTest=[kimlien1,kimlien2,kimlien3,du,multiface]
+        listImgTestLbl=["kimlien1","kimlien2","kimlien3","du","multiface"]
 
-encoder = DlibResNet()
+        du1 = "C:/Users/Admin/Desktop/bak/du1.aligned.png"
+        du2 = "C:/Users/Admin/Desktop/bak/du2.aligned.png"
 
-vector = encoder.predict(detector.normalize_face(f, 150, 150))[0].tolist()
-vector1 = encoder.predict(detector.normalize_face(f1, 150, 150))[0].tolist()
-vector2 = encoder.predict(detector.normalize_face(f2, 150, 150))[0].tolist()
-vector3 = encoder.predict(detector.normalize_face(f3, 150, 150))[0].tolist()
-vectordu1 = encoder.predict(detector.normalize_face(fdu, 150, 150))[0].tolist()
+        kimlien = cv2.imread(du1)
+        listImgTest=[cv2.imread(du2)]
 
-faceNetEncoder = FaceNet().loadModel()
+        (face_croped, region_face) = detector.detect_face(kimlien)[0]
 
-vector4 = faceNetEncoder.predict(
-    detector.normalize_face(f, 160, 160))[0].tolist()
-vector5 = faceNetEncoder.predict(
-    detector.normalize_face(f1, 160, 160))[0].tolist()
-vector6 = faceNetEncoder.predict(
-    detector.normalize_face(f2, 160, 160))[0].tolist()
-vector7 = faceNetEncoder.predict(
-    detector.normalize_face(f3, 160, 160))[0].tolist()
-vectordu2 = faceNetEncoder.predict(
-    detector.normalize_face(fdu, 160, 160))[0].tolist()
+        vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
 
-comparer = VectorCompare()
+        vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
 
-distance1 = round(np.float64(
-    comparer.findCosineDistance(vector, vector1)), 5)
-distance2 = round(np.float64(
-    comparer.findCosineDistance(vector, vector2)), 5)
-distance3 = round(np.float64(
-    comparer.findCosineDistance(vector, vector3)), 5)
-distancedu1 = round(np.float64(
-    comparer.findCosineDistance(vector, vectordu1)), 5)
+        for idx,img in enumerate( listImgTest):
+            foundFaces = detector.detect_face(img)
+            for i,f in enumerate(foundFaces):
+                vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
+                distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 10)
+                     
+                distanceDlibEcl = round(np.float64(comparer.findEuclideanDistance(vectorDlib, vdlib)), 10)
 
-distance4 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector5)), 5)
-distance5 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector6)), 5)
-distance6 = round(np.float64(
-    comparer.findCosineDistance(vector4, vector7)), 5)
-distancedu2 = round(np.float64(
-    comparer.findCosineDistance(vector4, vectordu2)), 5)
+                vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
+                distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 10)
+                distanceFnetEcl = round(np.float64(comparer.findEuclideanDistance(vectorFacenet, vfnet)), 10)
 
-print("Distance1")
-print(distance1)
-print("Distance2")
-print(distance2)
-print("Distance3")
-print(distance3)
-print("distancedu1")
-print(distancedu1)
+                print("{} {} {}".format(listImgTestLbl[idx], idx,i))
+                print("{} {} distanceDlib {}".format(idx,i,distanceDlib))                
+                print("{} {} distanceDlibEcl {}".format(idx,i,distanceDlibEcl))
 
-print("Distance4")
-print(distance4)
-print("Distance5")
-print(distance5)
-print("Distance6")
-print(distance6)
-print("distancedu2")
-print(distancedu2)
+                print("{} {} distanceFnet {}".format(idx,i,distanceFnet))                
+                print("{} {} distanceFnetEcl {}".format(idx,i,distanceFnetEcl))
 
-cv2.imshow("f0 - Ogininal - ", f)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance1 - "+str(distance1) , f1)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance2 - "+str(distance2), f2)
-cv2.waitKey(0)
-cv2.imshow("Dlib - Distance3 - "+str(distance3), f3)
-cv2.waitKey(0)
-cv2.imshow("Dlib - DistanceDu1 - "+str(distancedu1), fdu)
-cv2.waitKey(0)
+                dx0=f[1][0]
+                dy0=f[1][1]
+                dx1=f[1][0]+f[1][2]
+                dy1=f[1][1]+f[1][3]
+                cv2.rectangle(img,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance4 - "+str(distance4) , f1)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance5 - "+str(distance5), f2)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - Distance6 - "+str(distance6), f3)
-cv2.waitKey(0)
-cv2.imshow("FaceNet - DistanceDu2 - "+str(distancedu2),  fdu)
-cv2.waitKey(0)
+                resizeToSeeDetail=img
+                if img.shape[0]<600:
+                    resizeToSeeDetail = cv2.resize(img,(600,int( 600*img.shape[0]/img.shape[1])))
 
-cv2.destroyAllWindows()
+                imgw=f[0].shape[0]
+                imgh=f[0].shape[1]
+                resizeToSeeDetail[0:imgw,0:imgh,:] = f[0][0:imgw,0:imgh,:]
+
+                cv2.putText(resizeToSeeDetail, "{}".format(listImgTestLbl[idx])
+                ,(0,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "dlib: {} fnet:{}".format(distanceDlib,distanceFnet)
+                ,(0,70), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "size: {}".format(f[0].shape)
+                ,(0,110), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+                
+                cv2.putText(resizeToSeeDetail, "region: {}".format(f[1])
+                ,(0,140), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
+
+                cv2.imshow("",resizeToSeeDetail)
+                cv2.waitKey(0)
+
+
+        cv2.destroyAllWindows()       
+
+#UnitTest().Run()
+
+# dlibDetector=DlibDetector()
+# imgXxx= dlibDetector.normalize_face(cv2.imread("./imgtest/du.png"),150,150)
+# imgXxx = tf.squeeze(imgXxx)
+# plt.imshow(imgXxx)
+# plt.waitforbuttonpress()
+
+# imgXxx=  dlibDetector.normalize(cv2.imread("./imgtest/du.png"))
+# plt.imshow(imgXxx)
+# plt.waitforbuttonpress()
+
+# cv2.imshow("normalize",dlibDetector.normalize(cv2.imread("./imgtest/du.png")))
+# cv2.waitKey()
+# exit()
+def GetFrame( queue, queueDisplay, cameraUrl):
+        
+    vid = cv2.VideoCapture(cameraUrl)
+
+    while (True):
+        try:                
+        # Capture the video frame
+        # by frame
+            ret, frame = vid.read()
+
+            queueDisplay.put(frame)
+            queue.put(frame)
+
+        except Exception as ex :
+            print(ex)
+            pass
+
+def ShowFrame(queueDisplay, queueDetected ):
+    while(True):
+        try:
+            frame = queueDisplay.get()
+
+            cv2.putText(frame, "Press 'q' to quit"
+                ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+
+            detected = json.loads( queueDetected.get(False))
+
+            dx0=int(detected["dx0"])
+            dy0=int(detected["dy0"])
+            dx1=int(detected["dx1"])
+            dy1=int(detected["dy1"])
+
+            cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+            cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceIdx"],detected["minDistanceVal"], detected["svmResult"])
+                            ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+
+            cv2.imshow('frame', frame)            
+            # the 'q' button is set as the # quitting button you may use any # desired button of your choice
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        except Exception as ex:
+            print(ex)
+    
+    # Destroy all the windows
+    cv2.destroyAllWindows()         
+
+class CameraCapturer:
+    def __init__(self, cameraUrl) :
+        self._frameQueue = Queue()
+        self._frameQueueDisplay = Queue()
+        self._queueDetected = Queue()
+
+        self._cameraUrl=cameraUrl
+                
+        self.detector = DlibDetector()
+        self.encoderDlib = DlibResNet()
+        self.faceNetEncoder = FaceNet()
+        self.comparer = VectorCompare()
+        
+        self.svmFaceClassifier = SvmFaceClassifier()
+
+
+        self.arrVector=[]
+        self.arrLabel=[]        
+
+        self.dx0=0
+        self.dy0=0
+        
+        self.dx1=0
+        self.dy1=0
+
+        self.svmResult=""
+        self.minDistanceIdx = 0
+        self.minDistanceVal = ""
+
+        self.InitDataTest()
+
+        self._frameThread = Process(target=GetFrame, args=(self._frameQueue,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._faceThread = Process(target=ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
+        
+        pass
+
+    def Run(self):
+        self._frameThread.start()
+        self._faceThread.start()
+        
+        while(True):
+            
+            frame = self._frameQueue.get()
+            
+            foundFace = self.detector.detect_face(frame)
+            #foundFace=[]
+            #cv2.putText(frame, "Press 'q' to quit"
+            #            ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+
+            for ffound in foundFace:
+                (face_croped, region_face)=ffound
+                self.dx0=region_face[0]
+                self.dy0=region_face[1]
+                self.dx1=region_face[0]+region_face[2]
+                self.dy1=region_face[1]+region_face[3]
+                #cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
+
+                resCompare=[]
+                for idx, fDec in enumerate( self.arrVector):
+                    distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                    resCompare.append(distanceDlib)
+                
+                self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
+                    
+                if(len(resCompare)>0):
+                    resCompare=np.array(resCompare)
+                    self.minDistanceIdx = np.argmin( resCompare)
+                    self.minDistanceVal =str( resCompare[self.minDistanceIdx])
+                    lbl=self.arrLabel[self.minDistanceIdx]
+                    self._queueDetected.put(json.dumps({
+                    "dx0":self.dx0,
+                    "dy0":self.dy0,
+                    "dx1":self.dx1,
+                    "dy1":self.dy1,
+                    "svmResult":self.svmResult,
+                    "minDistanceIdx":lbl ,                   
+                    "minDistanceVal":self.minDistanceVal
+                    }))
+
+ 
+
+    def InitDataTest(self):
+        currentDir = os.path.dirname(os.path.realpath(__file__))
+        du = cv2.imread(currentDir+"/imgtest/du.png")
+        lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
+
+        listFaceImg=[du,lien]
+        self.arrVector=[]
+        self.arrLabel=["du","lien"]
+
+        # init data
+        for f in listFaceImg:
+            
+            # dupython=faceNetEncoder.predict(detector.normalize_face(f, 160, 160))[0].tolist() 
+            # ducsharp=[-0.08461350202560425,0.10870248079299927,0.06432205438613892,-0.0835186094045639,-0.07422533631324768,0.00490811001509428,-0.10617043823003769,-0.11593830585479736,0.16171839833259583,-0.08627026528120041,0.19098907709121704,0.027474718168377876,-0.1588139832019806,-0.11673740297555923,-0.03184450417757034,0.17447572946548462,-0.21998348832130432,-0.11274232715368271,-0.04906761646270752,-0.03833162412047386,0.015536666847765446,-0.013968057930469513,0.06154670938849449,-0.015136182308197021,-0.004737555980682373,-0.3857226073741913,-0.1531461626291275,-0.033451147377491,0.1293250322341919,-0.014566851779818535,-0.06157102435827255,0.04404592141509056,-0.13947558403015137,-0.036244578659534454,0.04797746613621712,0.12615805864334106,-0.04094607010483742,-0.09578743577003479,0.20858000218868256,0.009477553889155388,-0.19284509122371674,0.009535165503621101,0.03893325477838516,0.2014131247997284,0.20033597946166992,0.05419013649225235,0.09267432987689972,-0.10418299585580826,0.1710759699344635,-0.13257479667663574,0.07788347452878952,0.20047542452812195,0.11017601937055588,0.040150273591279984,0.06579692661762238,-0.14281445741653442,0.014650404453277588,0.11880778521299362,-0.0845942348241806,-0.0032528629526495934,0.06777388602495193,-0.07942613959312439,-0.03352980688214302,-0.05450119078159332,0.1645974963903427,0.13432051241397858,-0.0822133868932724,-0.28002259135246277,0.1726679801940918,-0.1224498599767685,-0.09288617968559265,0.03702991083264351,-0.1787620484828949,-0.12023984640836716,-0.3203735053539276,0.016981882974505424,0.3917646110057831,0.13254716992378235,-0.13457857072353363,0.05706636235117912,-0.05355007201433182,-0.04941961169242859,0.08157823979854584,0.19810020923614502,-0.11364033818244934,0.06015434116125107,-0.11575307697057724,-0.03986159712076187,0.19171485304832458,-0.04510653018951416,-0.06438742578029633,0.1563309133052826,0.012417611666023731,0.15993359684944153,-0.013175349682569504,0.00687784468755126,-0.0715840607881546,0.03327440842986107,-0.16201171278953552,-0.0642997995018959,0.056524571031332016,0.0012944573536515236,0.0010995147749781609,0.14070287346839905,-0.12210346758365631,0.10675622522830963,-0.022018637508153915,0.053566139191389084,-0.01362593099474907,0.0036583601031452417,-0.08977406471967697,-0.061004411429166794,0.13083568215370178,-0.18438611924648285,0.15581904351711273,0.22185635566711426,0.056422159075737,0.10172639042139053,0.21145308017730713,0.10877689719200134,0.04128382354974747,-0.03956277295947075,-0.17385803163051605,-0.03877662122249603,0.022608324885368347,0.02234923653304577,0.018250638619065285,0.041948456317186356]
+            # ducsharp=[-0.10398014634847641,0.10794883966445923,0.057899948209524155,-0.08929821103811264,-0.07987412065267563,0.005356641951948404,-0.10203596204519272,-0.1123555600643158,0.17756831645965576,-0.06860089302062988,0.1777464896440506,0.03762524574995041,-0.14587555825710297,-0.10983993858098984,-0.04997478052973747,0.15778887271881104,-0.24016454815864563,-0.10648773610591888,-0.037661362439394,-0.04075287654995918,0.012031548656523228,-0.007087382487952709,0.065708227455616,-0.019251834601163864,-0.011060167104005814,-0.3992408514022827,-0.14881759881973267,-0.05585815757513046,0.12496912479400635,-0.0065727876499295235,-0.044018879532814026,0.04138009622693062,-0.13536880910396576,-0.03814224153757095,0.05569831281900406,0.12151418626308441,-0.043977513909339905,-0.08311054110527039,0.2262917459011078,0.014616166241466999,-0.17973816394805908,0.012652965262532234,0.0415906123816967,0.21818502247333527,0.19471222162246704,0.060581497848033905,0.09066444635391235,-0.09763170033693314,0.18194372951984406,-0.13420668244361877,0.08961959183216095,0.20242926478385925,0.1085427775979042,0.03259436413645744,0.07740429043769836,-0.14349225163459778,0.014706777408719063,0.1084599569439888,-0.09015931934118271,0.009052915498614311,0.07297670841217041,-0.08070959150791168,-0.04748072102665901,-0.04667025804519653,0.15473026037216187,0.13682478666305542,-0.07261842489242554,-0.27443331480026245,0.17670060694217682,-0.12373635172843933,-0.09139660745859146,0.02678590640425682,-0.17544400691986084,-0.12786467373371124,-0.3131335973739624,0.017419148236513138,0.3820036053657532,0.1474863588809967,-0.13180862367153168,0.052374646067619324,-0.04782287776470184,-0.03899341821670532,0.08858342468738556,0.1909077763557434,-0.12646952271461487,0.06799647957086563,-0.10953369736671448,-0.03736007958650589,0.18051879107952118,-0.03375735878944397,-0.07824654132127762,0.15552803874015808,0.019757352769374847,0.15766434371471405,-0.008526738733053207,-0.010268501937389374,-0.06539805978536606,0.028726182878017426,-0.1784919649362564,-0.05876629054546356,0.07027806341648102,0.012774527072906494,0.006041618995368481,0.13448187708854675,-0.1346362829208374,0.1005270928144455,-0.021102702245116234,0.03701802343130112,-0.028610320761799812,-0.006408474408090115,-0.09627418965101242,-0.043287940323352814,0.14199160039424896,-0.18153926730155945,0.17177186906337738,0.22252316772937775,0.06252174079418182,0.11996880918741226,0.21088352799415588,0.07453229278326035,0.04539269208908081,-0.0383022204041481,-0.1682717651128769,-0.0440840981900692,0.018686611205339432,0.027798915281891823,0.025131896138191223,0.04252734035253525]
+            # distanceDlib = round(np.float64(comparer.findCosineDistance(dupython, ducsharp)), 10)
+            # print(distanceDlib)
+       
+            # distanceDlib = round(np.float64(comparer.findEuclideanDistance(dupython, ducsharp)), 10)
+            # print(distanceDlib)
+
+            ffound=self.detector.detect_face(f)
+            
+            if(len(ffound)>0):
+                fcrop,rrect = ffound[0]
+                xxxVector =self.encoderDlib.predict(self.detector.normalize_face(fcrop, 150, 150)) #[[]]
+                # for x in xxxVector:
+
+                #     f = open("demofile21.txt", "a")
+                #     f.write(json.dumps(x.tolist()))
+                #     f.write("\r\n\r\n")
+                #     f.write(json.dumps(xxxVector.tolist()))
+                #     f.close()
+                # exit()
+                vector=xxxVector[0].tolist()#[[]]
+                self.arrVector.append(vector)                
+        
+        self.svmFaceClassifier.Train(self.arrVector, self.arrLabel)
+        self.svmFaceClassifier.SaveModel()
+
+        pass
+
+
+
+cameraCap= CameraCapturer(0)
+
+if __name__ == '__main__':
+    cameraCap.Run()
+    cameraCap._frameThread.join()
+    cameraCap._faceThread.join()

@@ -144,4 +144,4 @@ tensorflowlearning/detectobject/data.zip
 /tensorflowlearning/trained_model_gpu1
 /tensorflowlearning/trained_model
 /tensorflowlearning/trained_model_cpu
-.vscode/settings.json
+faces/weights/facenet_keras_weights.h5
