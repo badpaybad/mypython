@@ -1240,7 +1240,7 @@ class SvmFaceClassifier:
         #result = loaded_model.score(X_test, Y_test)
     
     def PredictProba(self, vector):
-        return self.model.predict_proba(vector)[0].tolist()
+        return self.model.predict_proba(vector)
         #return self.model.predict(vector)
         pass
 
@@ -1256,7 +1256,15 @@ class CameraCapturer:
         while (True):
             try:     
                 ret, frame = vid.read()
+                fps = vid.get(cv2.CAP_PROP_FPS)
+                width  = vid.get(cv2.CAP_PROP_FRAME_WIDTH) 
+                
+                if(width>1800):
+                    frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
+
                 queueDisplay.put(frame)
+                #cv2.imwrite("test.jpg", frame)
+                #break
                 # xxx= opencv.detect_face(frame)
                 # for x in xxx:
                 #     region_face=x[1]
@@ -1273,7 +1281,7 @@ class CameraCapturer:
 
                 x = datetime.datetime.now().timestamp()
                 if(x - lasttime>0.5):
-                    print('put frame to detect at: {}'.format(x))
+                    print('put frame to detect at: {} with fps {}, frame width {}'.format(x,fps, width))
                     lasttime=x
                     queueToDetect.put(frame)
 
@@ -1386,21 +1394,21 @@ class CameraCapturer:
                 tempJson=[]
                 
                 if(self._frameQueueToDetect.qsize()>1):
-                    t1=datetime.datetime.now().timestamp()
+                    #t1=datetime.datetime.now().timestamp()
                     frame = self._frameQueueToDetect.get()
                     #print("begin detect")
                     foundFace = self.detector.detect_face(frame)
                     #foundFace=self.opencvDetector.detect_face(frame)
 
-                    t2=datetime.datetime.now().timestamp()
-                    print("face detect: {}".format(t2-t1))
+                    #t2=datetime.datetime.now().timestamp()
+                    #print("face detect: {}".format(t2-t1))
 
                     for ffound in foundFace:                   
                         
                         (face_croped, region_face)=ffound
                         
-                        cv2.imshow("croped",face_croped)
-                        cv2.waitKey(1)
+                        #cv2.imshow("croped",face_croped)
+                        #cv2.waitKey(1)
 
                         self.dx0=region_face[0]
                         self.dy0=region_face[1]
@@ -1408,24 +1416,25 @@ class CameraCapturer:
                         self.dy1=region_face[1]+region_face[3]
                         t1=datetime.datetime.now().timestamp()
                         vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
-                        t2=datetime.datetime.now().timestamp()
-                        print("face encoding: {}".format(t2-t1))
+                        #t2=datetime.datetime.now().timestamp()
+                        #print("face encoding: {}".format(t2-t1))
 
-                        t1=datetime.datetime.now().timestamp()
+                        #t1=datetime.datetime.now().timestamp()
                         resCompare=[]
                         for idx, fDec in enumerate( self.arrVector):
                             distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
                             resCompare.append(distanceDlib)
                         
-                        svmProba =self.svmFaceClassifier.PredictProba([vector])
+                        svmProba =self.svmFaceClassifier.PredictProba([vector])[0].tolist()
 
                         svmMaxDistanceIdx = np.argmax(svmProba)
 
                         self.svmResult =self.arrLabel[svmMaxDistanceIdx]
                         self.svmProbability=str( svmProba[svmMaxDistanceIdx])
+    
 
-                        t2=datetime.datetime.now().timestamp()
-                        print("face predict: {}".format(t2-t1))
+                        #t2=datetime.datetime.now().timestamp()
+                        #print("face predict: {}".format(t2-t1))
 
                         print(svmProba)
                         print(self.svmProbability)
@@ -1468,12 +1477,16 @@ class CameraCapturer:
         
     def InitDataTest(self):
         currentDir = os.path.dirname(os.path.realpath(__file__))
-        du = cv2.imread(currentDir+"/imgtest/du.png")
-        lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
+        du = cv2.imread(currentDir+"/imgtest/du.png")        
+        du1 = cv2.imread(currentDir+"/imgtest/dud123.jpg")
+        lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")        
+        lien1 = cv2.imread(currentDir+"/imgtest/kimlien2.png")        
+        lien2 = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
+        tanh = cv2.imread(currentDir+"/imgtest/aantt.png")
 
-        listFaceImg=[du,lien]
+        listFaceImg=[du,du1,lien,lien1,lien2,tanh]
         self.arrVector=[]
-        self.arrLabel=["du","lien"]
+        self.arrLabel=["du","du","lien","lien","lien","tanh"]
 
         # init data
         for f in listFaceImg:
@@ -1510,7 +1523,6 @@ class CameraCapturer:
         pass
 
 cameraCap= CameraCapturer(0)
-#cameraCap= CameraCapturer("rtsp://admin:Omt123123@192.168.3.109:554/Streamming/Channels/101")
 
 if __name__ == '__main__':
     cameraCap.InitDataTest()
