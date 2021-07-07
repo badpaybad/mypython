@@ -1135,6 +1135,56 @@ class DlibDetector:
             y = np.multiply(np.subtract(image, mean), 1 / std_adj)
             return y
 
+class OpenCvDetector:
+    def __init__(self):
+        self.__FileFolder = os.path.dirname(os.path.realpath(__file__))
+
+        self.file_weights = self.__FileFolder +    '/weights/haarcascade_frontalface_default.xml'
+        self.detector= cv2.CascadeClassifier(self.file_weights)
+        self.detectorLEye= cv2.CascadeClassifier(self.__FileFolder +    '/weights/haarcascade_lefteye_2splits.xml')
+        self.detectorREye= cv2.CascadeClassifier(self.__FileFolder +    '/weights/haarcascade_righteye_2splits.xml')
+        pass
+    def detect_face(self, imgInput, align=True):
+        
+        gray = cv2.cvtColor(imgInput, cv2.COLOR_BGR2GRAY)
+        
+        rects = self.detector.detectMultiScale(gray, scaleFactor=1.3,
+            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
+        
+        listDetected=[]
+        for (x, y, w, h) in rects:
+            #cv2.rectangle(imgInput, (x, y), (x + w, y + h), (255, 255,0, 255), 2)
+
+            detected_face=imgInput[y:y+h, x:x+w]
+
+            grayface =gray[y:y+h, x:x+w]
+
+            leyes = self.detectorLEye.detectMultiScale(grayface, scaleFactor=1.3,
+            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
+
+            reyes = self.detectorREye.detectMultiScale(grayface, scaleFactor=1.3,
+            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
+
+            if(len(leyes)>0 or len(reyes)>0):
+                detected_face_region=(x,y,w,h)
+                listDetected.append((detected_face, detected_face_region))
+            
+        return listDetected
+        pass
+    
+    def normalize_face(self,img, w, h):
+        img = cv2.resize(img, (w, h))
+        img_pixels = image.img_to_array(img)
+        img_pixels = np.expand_dims(img_pixels, axis=0)
+        #tf.squeeze(img_pixels)
+        img_pixels /= 255  # normalize input in [0, 1]
+        #print(img_pixels.shape)
+        #print(img_pixels.ndim)
+        #print(img_pixels)
+        return img_pixels
+        pass
+
+
 class VectorCompare:
     def __init__(self):
         pass
@@ -1189,9 +1239,286 @@ class SvmFaceClassifier:
         self.model = pickle.load(open(modelPath, 'rb'))
         #result = loaded_model.score(X_test, Y_test)
     
-    def Predict(self, vector):
-        return self.model.predict(vector)
+    def PredictProba(self, vector):
+        return self.model.predict_proba(vector)[0].tolist()
+        #return self.model.predict(vector)
         pass
+
+class CameraCapturer:
+    
+    @staticmethod
+    def GetFrame( queueToDetect, queueDisplay, cameraUrl):
+        #opencv = OpenCvDetector()
+
+        vid = cv2.VideoCapture(cameraUrl)
+        lasttime=datetime.datetime.now().timestamp()
+        print("Begin get frame: "+ str(lasttime))
+        while (True):
+            try:     
+                ret, frame = vid.read()
+                queueDisplay.put(frame)
+                # xxx= opencv.detect_face(frame)
+                # for x in xxx:
+                #     region_face=x[1]
+                #     dx0=region_face[0]
+                #     dy0=region_face[1]
+                #     dx1=region_face[0]+region_face[2]
+                #     dy1=region_face[1]+region_face[3]
+
+                #     cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                #     cv2.imshow("1123",frame)
+                #     cv2.waitKey(1)
+                # continue
+
+                x = datetime.datetime.now().timestamp()
+                if(x - lasttime>0.5):
+                    print('put frame to detect at: {}'.format(x))
+                    lasttime=x
+                    queueToDetect.put(frame)
+
+            except Exception as ex:
+                print("Error get frame")
+                print(ex)
+                pass
+            finally:
+                #time.sleep(0.0001)
+                pass
+
+    @staticmethod        
+    def ShowFrame(queueDisplay, queueDetected ):
+        
+        lastDetecteds=[]
+
+        while(True):
+            try:
+                frame = queueDisplay.get()
+
+                cv2.putText(frame, "Press 'q' to quit"
+                    ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+                # the 'q' button is set as the # quitting button you may use any # desired button of your choice
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+                lastJson=""
+                qsize=queueDetected.qsize()
+                if(qsize>0):
+                    for i in range(0,qsize):
+                        try:
+                            qit=queueDetected.get()
+                            
+                            if(qit != Empty):
+                                print("lastJson: "+ qit)
+                                lastJson= qit                        
+                        except Exception:                        
+                            continue
+
+                if(lastJson!=""):
+                    lastDetecteds = json.loads(lastJson)
+
+                if(len(lastDetecteds)>0) :                    
+                    for detected in lastDetecteds:
+                        dx0=int(detected["dx0"])
+                        dy0=int(detected["dy0"])
+                        dx1=int(detected["dx1"])
+                        dy1=int(detected["dy1"])
+
+                        cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                        cv2.putText(frame, "{} {} svm:{} : {}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"],detected["svmProbability"])
+                                        ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                
+                cv2.imshow('frame', frame)       
+
+            except Exception as ex:
+                print("Some error showing video")
+                print(ex)
+                time.sleep(1)
+                pass
+            finally:
+                time.sleep(0.0001)
+                pass
+        
+        # Destroy all the windows
+        cv2.destroyAllWindows()   
+
+    def __init__(self, cameraUrl) :
+        self._frameQueueToDetect = Queue()
+        self._frameQueueDisplay = Queue()
+        self._queueDetected = Queue()
+        self._cameraUrl=cameraUrl
+
+        self.opencvDetector =OpenCvDetector()        
+        self.detector = DlibDetector()
+        self.encoderDlib = DlibResNet()
+        self.faceNetEncoder = FaceNet()
+        self.comparer = VectorCompare()
+        
+        self.svmFaceClassifier = SvmFaceClassifier()
+
+        self.arrVector=[]
+        self.arrLabel=[]        
+
+        self.dx0=0
+        self.dy0=0
+        
+        self.dx1=0
+        self.dy1=0
+        
+        self.svmProbability=""
+        self.svmResult=""
+        self.minDistanceIdx = 0
+        self.minDistanceVal = ""
+        self.minDistanceLbl=""        
+        self.lastJsonDetected=""
+        
+        self._frameThread = Process(target=CameraCapturer.GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._faceThread = Process(target=CameraCapturer.ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
+        
+        pass
+
+    def Run(self):
+        self._frameThread.start()
+        self._faceThread.start()
+        
+        while(True):
+            try:                    
+                tempJson=[]
+                
+                if(self._frameQueueToDetect.qsize()>1):
+                    t1=datetime.datetime.now().timestamp()
+                    frame = self._frameQueueToDetect.get()
+                    #print("begin detect")
+                    #foundFace = self.detector.detect_face(frame)
+                    foundFace=self.opencvDetector.detect_face(frame)
+
+                    t2=datetime.datetime.now().timestamp()
+                    print("face detect: {}".format(t2-t1))
+
+                    for ffound in foundFace:                   
+                        
+                        (face_croped, region_face)=ffound
+                        
+                        #cv2.imshow("croped",face_croped)
+                        #cv2.waitKey(1)
+
+                        self.dx0=region_face[0]
+                        self.dy0=region_face[1]
+                        self.dx1=region_face[0]+region_face[2]
+                        self.dy1=region_face[1]+region_face[3]
+                        t1=datetime.datetime.now().timestamp()
+                        vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
+                        t2=datetime.datetime.now().timestamp()
+                        print("face encoding: {}".format(t2-t1))
+
+                        t1=datetime.datetime.now().timestamp()
+                        resCompare=[]
+                        for idx, fDec in enumerate( self.arrVector):
+                            distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                            resCompare.append(distanceDlib)
+                        
+                        svmProba =self.svmFaceClassifier.PredictProba([vector])
+
+                        svmMaxDistanceIdx = np.argmax(svmProba)
+
+                        self.svmResult =self.arrLabel[svmMaxDistanceIdx]
+                        self.svmProbability=str( svmProba[svmMaxDistanceIdx])
+
+                        t2=datetime.datetime.now().timestamp()
+                        print("face predict: {}".format(t2-t1))
+
+                        print(svmProba)
+                        print(self.arrLabel)
+
+                        if(len(resCompare)>0):
+                            #print("comparing")
+                            resCompare=np.array(resCompare)
+                            self.minDistanceIdx = np.argmin( resCompare)
+                            self.minDistanceVal =str( resCompare[self.minDistanceIdx])
+                            self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
+
+                            tempJson.append({
+                            "dx0":self.dx0,
+                            "dy0":self.dy0,
+                            "dx1":self.dx1,
+                            "dy1":self.dy1,
+                            "svmResult":self.svmResult,
+                            "svmProbability":self.svmProbability,
+                            "minDistanceLbl":self.minDistanceLbl ,                   
+                            "minDistanceVal":self.minDistanceVal
+                            })
+                        
+                if(len(tempJson)>0):             
+                    self.lastJsonDetected=json.dumps(tempJson)
+                                                                
+                    self._queueDetected.put(self.lastJsonDetected)  
+                    print("putted to queue: {} detected: {}".format(self._queueDetected.qsize(), self.lastJsonDetected))     
+                        
+            except Exception as ex:
+                print("Error detect")
+                print(ex)
+                time.sleep(1)
+                pass
+            finally:
+                #time.sleep(0.0001)
+                pass
+            
+        cameraCap._frameThread.join()
+        cameraCap._faceThread.join()
+        
+    def InitDataTest(self):
+        currentDir = os.path.dirname(os.path.realpath(__file__))
+        du = cv2.imread(currentDir+"/imgtest/du.png")
+        lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
+
+        listFaceImg=[du,lien]
+        self.arrVector=[]
+        self.arrLabel=["du","lien"]
+
+        # init data
+        for f in listFaceImg:
+            
+            # dupython=faceNetEncoder.predict(detector.normalize_face(f, 160, 160))[0].tolist() 
+            # ducsharp=[-0.08461350202560425,0.10870248079299927,0.06432205438613892,-0.0835186094045639,-0.07422533631324768,0.00490811001509428,-0.10617043823003769,-0.11593830585479736,0.16171839833259583,-0.08627026528120041,0.19098907709121704,0.027474718168377876,-0.1588139832019806,-0.11673740297555923,-0.03184450417757034,0.17447572946548462,-0.21998348832130432,-0.11274232715368271,-0.04906761646270752,-0.03833162412047386,0.015536666847765446,-0.013968057930469513,0.06154670938849449,-0.015136182308197021,-0.004737555980682373,-0.3857226073741913,-0.1531461626291275,-0.033451147377491,0.1293250322341919,-0.014566851779818535,-0.06157102435827255,0.04404592141509056,-0.13947558403015137,-0.036244578659534454,0.04797746613621712,0.12615805864334106,-0.04094607010483742,-0.09578743577003479,0.20858000218868256,0.009477553889155388,-0.19284509122371674,0.009535165503621101,0.03893325477838516,0.2014131247997284,0.20033597946166992,0.05419013649225235,0.09267432987689972,-0.10418299585580826,0.1710759699344635,-0.13257479667663574,0.07788347452878952,0.20047542452812195,0.11017601937055588,0.040150273591279984,0.06579692661762238,-0.14281445741653442,0.014650404453277588,0.11880778521299362,-0.0845942348241806,-0.0032528629526495934,0.06777388602495193,-0.07942613959312439,-0.03352980688214302,-0.05450119078159332,0.1645974963903427,0.13432051241397858,-0.0822133868932724,-0.28002259135246277,0.1726679801940918,-0.1224498599767685,-0.09288617968559265,0.03702991083264351,-0.1787620484828949,-0.12023984640836716,-0.3203735053539276,0.016981882974505424,0.3917646110057831,0.13254716992378235,-0.13457857072353363,0.05706636235117912,-0.05355007201433182,-0.04941961169242859,0.08157823979854584,0.19810020923614502,-0.11364033818244934,0.06015434116125107,-0.11575307697057724,-0.03986159712076187,0.19171485304832458,-0.04510653018951416,-0.06438742578029633,0.1563309133052826,0.012417611666023731,0.15993359684944153,-0.013175349682569504,0.00687784468755126,-0.0715840607881546,0.03327440842986107,-0.16201171278953552,-0.0642997995018959,0.056524571031332016,0.0012944573536515236,0.0010995147749781609,0.14070287346839905,-0.12210346758365631,0.10675622522830963,-0.022018637508153915,0.053566139191389084,-0.01362593099474907,0.0036583601031452417,-0.08977406471967697,-0.061004411429166794,0.13083568215370178,-0.18438611924648285,0.15581904351711273,0.22185635566711426,0.056422159075737,0.10172639042139053,0.21145308017730713,0.10877689719200134,0.04128382354974747,-0.03956277295947075,-0.17385803163051605,-0.03877662122249603,0.022608324885368347,0.02234923653304577,0.018250638619065285,0.041948456317186356]
+            # ducsharp=[-0.10398014634847641,0.10794883966445923,0.057899948209524155,-0.08929821103811264,-0.07987412065267563,0.005356641951948404,-0.10203596204519272,-0.1123555600643158,0.17756831645965576,-0.06860089302062988,0.1777464896440506,0.03762524574995041,-0.14587555825710297,-0.10983993858098984,-0.04997478052973747,0.15778887271881104,-0.24016454815864563,-0.10648773610591888,-0.037661362439394,-0.04075287654995918,0.012031548656523228,-0.007087382487952709,0.065708227455616,-0.019251834601163864,-0.011060167104005814,-0.3992408514022827,-0.14881759881973267,-0.05585815757513046,0.12496912479400635,-0.0065727876499295235,-0.044018879532814026,0.04138009622693062,-0.13536880910396576,-0.03814224153757095,0.05569831281900406,0.12151418626308441,-0.043977513909339905,-0.08311054110527039,0.2262917459011078,0.014616166241466999,-0.17973816394805908,0.012652965262532234,0.0415906123816967,0.21818502247333527,0.19471222162246704,0.060581497848033905,0.09066444635391235,-0.09763170033693314,0.18194372951984406,-0.13420668244361877,0.08961959183216095,0.20242926478385925,0.1085427775979042,0.03259436413645744,0.07740429043769836,-0.14349225163459778,0.014706777408719063,0.1084599569439888,-0.09015931934118271,0.009052915498614311,0.07297670841217041,-0.08070959150791168,-0.04748072102665901,-0.04667025804519653,0.15473026037216187,0.13682478666305542,-0.07261842489242554,-0.27443331480026245,0.17670060694217682,-0.12373635172843933,-0.09139660745859146,0.02678590640425682,-0.17544400691986084,-0.12786467373371124,-0.3131335973739624,0.017419148236513138,0.3820036053657532,0.1474863588809967,-0.13180862367153168,0.052374646067619324,-0.04782287776470184,-0.03899341821670532,0.08858342468738556,0.1909077763557434,-0.12646952271461487,0.06799647957086563,-0.10953369736671448,-0.03736007958650589,0.18051879107952118,-0.03375735878944397,-0.07824654132127762,0.15552803874015808,0.019757352769374847,0.15766434371471405,-0.008526738733053207,-0.010268501937389374,-0.06539805978536606,0.028726182878017426,-0.1784919649362564,-0.05876629054546356,0.07027806341648102,0.012774527072906494,0.006041618995368481,0.13448187708854675,-0.1346362829208374,0.1005270928144455,-0.021102702245116234,0.03701802343130112,-0.028610320761799812,-0.006408474408090115,-0.09627418965101242,-0.043287940323352814,0.14199160039424896,-0.18153926730155945,0.17177186906337738,0.22252316772937775,0.06252174079418182,0.11996880918741226,0.21088352799415588,0.07453229278326035,0.04539269208908081,-0.0383022204041481,-0.1682717651128769,-0.0440840981900692,0.018686611205339432,0.027798915281891823,0.025131896138191223,0.04252734035253525]
+            # distanceDlib = round(np.float64(comparer.findCosineDistance(dupython, ducsharp)), 10)
+            # print(distanceDlib)
+       
+            # distanceDlib = round(np.float64(comparer.findEuclideanDistance(dupython, ducsharp)), 10)
+            # print(distanceDlib)
+
+            #ffound=self.detector.detect_face(f)
+            ffound= self.opencvDetector.detect_face(f)
+            
+            if(len(ffound)>0):
+                fcrop,rrect = ffound[0]
+                xxxVector =self.encoderDlib.predict(self.detector.normalize_face(fcrop, 150, 150)) #[[]]
+                # for x in xxxVector:
+
+                #     f = open("demofile21.txt", "a")
+                #     f.write(json.dumps(x.tolist()))
+                #     f.write("\r\n\r\n")
+                #     f.write(json.dumps(xxxVector.tolist()))
+                #     f.close()
+                # exit()
+                vector=xxxVector[0].tolist()#[[]]
+                self.arrVector.append(vector)                
+        
+        self.svmFaceClassifier.Train(self.arrVector, self.arrLabel)
+        self.svmFaceClassifier.SaveModel()
+
+        pass
+
+cameraCap= CameraCapturer(0)
+#cameraCap= CameraCapturer("rtsp://admin:Omt123123@192.168.3.109:554/Streamming/Channels/101")
+
+if __name__ == '__main__':
+    cameraCap.InitDataTest()
+
+    cameraCap.Run()
+    
+
+
 
 class UnitTest:
 
@@ -1284,235 +1611,3 @@ class UnitTest:
 
 
         cv2.destroyAllWindows()       
-
-class CameraCapturer:
-    
-    @staticmethod
-    def GetFrame( queueToDetect, queueDisplay, cameraUrl):
-        
-        vid = cv2.VideoCapture(cameraUrl)
-        lasttime=datetime.datetime.now().timestamp()
-        print("Begin get frame: "+ str(lasttime))
-        while (True):
-            try:     
-                ret, frame = vid.read()
-
-                queueDisplay.put(frame)
-                
-                x = datetime.datetime.now().timestamp()
-                if(x - lasttime>1):
-                    #print('put frame to detect: '+ str(x))
-                    lasttime=x
-                    queueToDetect.put(frame)
-
-            except Exception as ex:
-                print("Error get frame")
-                print(ex)
-                pass
-            finally:
-                #time.sleep(0.0001)
-                pass
-
-    @staticmethod        
-    def ShowFrame(queueDisplay, queueDetected ):
-        
-        lastDetecteds=[]
-
-        while(True):
-            try:
-                frame = queueDisplay.get()
-
-                cv2.putText(frame, "Press 'q' to quit"
-                    ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
-                # the 'q' button is set as the # quitting button you may use any # desired button of your choice
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
-                lastJson=""
-                qsize=queueDetected.qsize()
-                if(qsize>0):
-                    for i in range(0,qsize):
-                        try:
-                            qit=queueDetected.get()
-                            
-                            if(qit != Empty):
-                                print("lastJson: "+ qit)
-                                lastJson= qit                        
-                        except Exception:                        
-                            continue
-
-                if(lastJson!=""):
-                    lastDetecteds = json.loads(lastJson)
-
-                if(len(lastDetecteds)>0) :                    
-                    for detected in lastDetecteds:
-                        dx0=int(detected["dx0"])
-                        dy0=int(detected["dy0"])
-                        dx1=int(detected["dx1"])
-                        dy1=int(detected["dy1"])
-
-                        cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-                        cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"])
-                                        ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
-                
-                cv2.imshow('frame', frame)       
-
-            except Exception as ex:
-                print("Some error showing video")
-                print(ex)
-                time.sleep(1)
-                pass
-            finally:
-                time.sleep(0.0001)
-                pass
-        
-        # Destroy all the windows
-        cv2.destroyAllWindows()   
-
-    def __init__(self, cameraUrl) :
-        self._frameQueueToDetect = Queue()
-        self._frameQueueDisplay = Queue()
-        self._queueDetected = Queue()
-        self._cameraUrl=cameraUrl
-                
-        self.detector = DlibDetector()
-        self.encoderDlib = DlibResNet()
-        self.faceNetEncoder = FaceNet()
-        self.comparer = VectorCompare()
-        
-        self.svmFaceClassifier = SvmFaceClassifier()
-
-        self.arrVector=[]
-        self.arrLabel=[]        
-
-        self.dx0=0
-        self.dy0=0
-        
-        self.dx1=0
-        self.dy1=0
-
-        self.svmResult=""
-        self.minDistanceIdx = 0
-        self.minDistanceVal = ""
-        self.minDistanceLbl=""        
-        self.lastJsonDetected=""
-        
-        self.InitDataTest()
-
-        self._frameThread = Process(target=CameraCapturer.GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
-        self._faceThread = Process(target=CameraCapturer.ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
-        
-        pass
-
-    def Run(self):
-        self._frameThread.start()
-        self._faceThread.start()
-        
-        while(True):
-            try:                    
-                tempJson=[]
-                
-                if(self._frameQueueToDetect.qsize()>1):
-
-                    frame = self._frameQueueToDetect.get()
-                    #print("begin detect")
-                    foundFace = self.detector.detect_face(frame)
-                    
-                    for ffound in foundFace:                   
-                        
-                        (face_croped, region_face)=ffound
-                        self.dx0=region_face[0]
-                        self.dy0=region_face[1]
-                        self.dx1=region_face[0]+region_face[2]
-                        self.dy1=region_face[1]+region_face[3]
-                        
-                        vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
-
-                        resCompare=[]
-                        for idx, fDec in enumerate( self.arrVector):
-                            distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
-                            resCompare.append(distanceDlib)
-                        
-                        self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
-                            
-                        if(len(resCompare)>0):
-                            #print("comparing")
-                            resCompare=np.array(resCompare)
-                            self.minDistanceIdx = np.argmin( resCompare)
-                            self.minDistanceVal =str( resCompare[self.minDistanceIdx])
-                            self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
-
-                            tempJson.append({
-                            "dx0":self.dx0,
-                            "dy0":self.dy0,
-                            "dx1":self.dx1,
-                            "dy1":self.dy1,
-                            "svmResult":self.svmResult,
-                            "minDistanceLbl":self.minDistanceLbl ,                   
-                            "minDistanceVal":self.minDistanceVal
-                            })
-                        
-                if(len(tempJson)>0):             
-                    self.lastJsonDetected=json.dumps(tempJson)
-                                                                
-                    self._queueDetected.put(self.lastJsonDetected)  
-                    print("putted to queue: {} detected: {}".format(self._queueDetected.qsize(), self.lastJsonDetected))     
-                        
-            except Exception as ex:
-                print("Error detect")
-                print(ex)
-                time.sleep(1)
-                pass
-            finally:
-                #time.sleep(0.0001)
-                pass
-    
-    def InitDataTest(self):
-        currentDir = os.path.dirname(os.path.realpath(__file__))
-        du = cv2.imread(currentDir+"/imgtest/du.png")
-        lien = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
-
-        listFaceImg=[du,lien]
-        self.arrVector=[]
-        self.arrLabel=["du","lien"]
-
-        # init data
-        for f in listFaceImg:
-            
-            # dupython=faceNetEncoder.predict(detector.normalize_face(f, 160, 160))[0].tolist() 
-            # ducsharp=[-0.08461350202560425,0.10870248079299927,0.06432205438613892,-0.0835186094045639,-0.07422533631324768,0.00490811001509428,-0.10617043823003769,-0.11593830585479736,0.16171839833259583,-0.08627026528120041,0.19098907709121704,0.027474718168377876,-0.1588139832019806,-0.11673740297555923,-0.03184450417757034,0.17447572946548462,-0.21998348832130432,-0.11274232715368271,-0.04906761646270752,-0.03833162412047386,0.015536666847765446,-0.013968057930469513,0.06154670938849449,-0.015136182308197021,-0.004737555980682373,-0.3857226073741913,-0.1531461626291275,-0.033451147377491,0.1293250322341919,-0.014566851779818535,-0.06157102435827255,0.04404592141509056,-0.13947558403015137,-0.036244578659534454,0.04797746613621712,0.12615805864334106,-0.04094607010483742,-0.09578743577003479,0.20858000218868256,0.009477553889155388,-0.19284509122371674,0.009535165503621101,0.03893325477838516,0.2014131247997284,0.20033597946166992,0.05419013649225235,0.09267432987689972,-0.10418299585580826,0.1710759699344635,-0.13257479667663574,0.07788347452878952,0.20047542452812195,0.11017601937055588,0.040150273591279984,0.06579692661762238,-0.14281445741653442,0.014650404453277588,0.11880778521299362,-0.0845942348241806,-0.0032528629526495934,0.06777388602495193,-0.07942613959312439,-0.03352980688214302,-0.05450119078159332,0.1645974963903427,0.13432051241397858,-0.0822133868932724,-0.28002259135246277,0.1726679801940918,-0.1224498599767685,-0.09288617968559265,0.03702991083264351,-0.1787620484828949,-0.12023984640836716,-0.3203735053539276,0.016981882974505424,0.3917646110057831,0.13254716992378235,-0.13457857072353363,0.05706636235117912,-0.05355007201433182,-0.04941961169242859,0.08157823979854584,0.19810020923614502,-0.11364033818244934,0.06015434116125107,-0.11575307697057724,-0.03986159712076187,0.19171485304832458,-0.04510653018951416,-0.06438742578029633,0.1563309133052826,0.012417611666023731,0.15993359684944153,-0.013175349682569504,0.00687784468755126,-0.0715840607881546,0.03327440842986107,-0.16201171278953552,-0.0642997995018959,0.056524571031332016,0.0012944573536515236,0.0010995147749781609,0.14070287346839905,-0.12210346758365631,0.10675622522830963,-0.022018637508153915,0.053566139191389084,-0.01362593099474907,0.0036583601031452417,-0.08977406471967697,-0.061004411429166794,0.13083568215370178,-0.18438611924648285,0.15581904351711273,0.22185635566711426,0.056422159075737,0.10172639042139053,0.21145308017730713,0.10877689719200134,0.04128382354974747,-0.03956277295947075,-0.17385803163051605,-0.03877662122249603,0.022608324885368347,0.02234923653304577,0.018250638619065285,0.041948456317186356]
-            # ducsharp=[-0.10398014634847641,0.10794883966445923,0.057899948209524155,-0.08929821103811264,-0.07987412065267563,0.005356641951948404,-0.10203596204519272,-0.1123555600643158,0.17756831645965576,-0.06860089302062988,0.1777464896440506,0.03762524574995041,-0.14587555825710297,-0.10983993858098984,-0.04997478052973747,0.15778887271881104,-0.24016454815864563,-0.10648773610591888,-0.037661362439394,-0.04075287654995918,0.012031548656523228,-0.007087382487952709,0.065708227455616,-0.019251834601163864,-0.011060167104005814,-0.3992408514022827,-0.14881759881973267,-0.05585815757513046,0.12496912479400635,-0.0065727876499295235,-0.044018879532814026,0.04138009622693062,-0.13536880910396576,-0.03814224153757095,0.05569831281900406,0.12151418626308441,-0.043977513909339905,-0.08311054110527039,0.2262917459011078,0.014616166241466999,-0.17973816394805908,0.012652965262532234,0.0415906123816967,0.21818502247333527,0.19471222162246704,0.060581497848033905,0.09066444635391235,-0.09763170033693314,0.18194372951984406,-0.13420668244361877,0.08961959183216095,0.20242926478385925,0.1085427775979042,0.03259436413645744,0.07740429043769836,-0.14349225163459778,0.014706777408719063,0.1084599569439888,-0.09015931934118271,0.009052915498614311,0.07297670841217041,-0.08070959150791168,-0.04748072102665901,-0.04667025804519653,0.15473026037216187,0.13682478666305542,-0.07261842489242554,-0.27443331480026245,0.17670060694217682,-0.12373635172843933,-0.09139660745859146,0.02678590640425682,-0.17544400691986084,-0.12786467373371124,-0.3131335973739624,0.017419148236513138,0.3820036053657532,0.1474863588809967,-0.13180862367153168,0.052374646067619324,-0.04782287776470184,-0.03899341821670532,0.08858342468738556,0.1909077763557434,-0.12646952271461487,0.06799647957086563,-0.10953369736671448,-0.03736007958650589,0.18051879107952118,-0.03375735878944397,-0.07824654132127762,0.15552803874015808,0.019757352769374847,0.15766434371471405,-0.008526738733053207,-0.010268501937389374,-0.06539805978536606,0.028726182878017426,-0.1784919649362564,-0.05876629054546356,0.07027806341648102,0.012774527072906494,0.006041618995368481,0.13448187708854675,-0.1346362829208374,0.1005270928144455,-0.021102702245116234,0.03701802343130112,-0.028610320761799812,-0.006408474408090115,-0.09627418965101242,-0.043287940323352814,0.14199160039424896,-0.18153926730155945,0.17177186906337738,0.22252316772937775,0.06252174079418182,0.11996880918741226,0.21088352799415588,0.07453229278326035,0.04539269208908081,-0.0383022204041481,-0.1682717651128769,-0.0440840981900692,0.018686611205339432,0.027798915281891823,0.025131896138191223,0.04252734035253525]
-            # distanceDlib = round(np.float64(comparer.findCosineDistance(dupython, ducsharp)), 10)
-            # print(distanceDlib)
-       
-            # distanceDlib = round(np.float64(comparer.findEuclideanDistance(dupython, ducsharp)), 10)
-            # print(distanceDlib)
-
-            ffound=self.detector.detect_face(f)
-            
-            if(len(ffound)>0):
-                fcrop,rrect = ffound[0]
-                xxxVector =self.encoderDlib.predict(self.detector.normalize_face(fcrop, 150, 150)) #[[]]
-                # for x in xxxVector:
-
-                #     f = open("demofile21.txt", "a")
-                #     f.write(json.dumps(x.tolist()))
-                #     f.write("\r\n\r\n")
-                #     f.write(json.dumps(xxxVector.tolist()))
-                #     f.close()
-                # exit()
-                vector=xxxVector[0].tolist()#[[]]
-                self.arrVector.append(vector)                
-        
-        self.svmFaceClassifier.Train(self.arrVector, self.arrLabel)
-        self.svmFaceClassifier.SaveModel()
-
-        pass
-
-cameraCap= CameraCapturer(0)
-
-if __name__ == '__main__':
-    cameraCap.Run()
-    cameraCap._frameThread.join()
-    cameraCap._faceThread.join()
