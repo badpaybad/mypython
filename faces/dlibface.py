@@ -1305,7 +1305,7 @@ class SvmFaceClassifier:
         svmMaxDistanceIdx = np.argmax(svmProba)
 
         svmResult =self.faceLabels[svmMaxDistanceIdx]
-        svmProbability=str( svmProba[svmMaxDistanceIdx])
+        svmProbability=round( np.float32( svmProba[svmMaxDistanceIdx]),5)
         
         return(svmResult,svmProbability)
         
@@ -1496,12 +1496,12 @@ class CameraCapturer:
 
                     resCompare=[]
                     for idx, fDec in enumerate( self.arrVectorDlib):
-                        distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 5)
+                        distanceDlib = round(np.float32(self.comparer.findCosineDistance(fDec, vector)), 5)
                         resCompare.append(distanceDlib)
                     
                     resCompareFacenet=[]
                     for idx, fDec in enumerate( self.arrVectorFacenet):
-                        distanceFn = round(np.float64(self.comparer.findEuclideanDistance(fDec, vectorFn)), 5)
+                        distanceFn = round(np.float32(self.comparer.findEuclideanDistance(fDec, vectorFn)), 5)
                         resCompareFacenet.append(distanceFn)                    
                     
                     (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)
@@ -1513,12 +1513,12 @@ class CameraCapturer:
                         #print("comparing")
                         resCompare=np.array(resCompare)
                         idxDlib = np.argmin( resCompare)
-                        valDlib =str( resCompare[idxDlib])
+                        valDlib =resCompare[idxDlib]
                         lblDlib=self.arrLabel[idxDlib]
                         
                         resCompareFacenet= np.array(resCompareFacenet)
                         idxFn= np.argmin(resCompareFacenet)
-                        valFn= str(resCompareFacenet[idxFn])
+                        valFn= resCompareFacenet[idxFn]
                         lblFn= self.arrLabel[idxFn]
 
                         tempJson.append({
@@ -1527,13 +1527,13 @@ class CameraCapturer:
                         "dx1":dx1,
                         "dy1":dy1,
                         "svmLblDlib":svmLblDlib,
-                        "svmProbDlib":svmProbDlib,
+                        "svmProbDlib":str(svmProbDlib),
                         "lblDlib":lblDlib ,                   
-                        "valDlib":valDlib,
+                        "valDlib":str(valDlib),
                         "svmLblFacenet":svmLblFn,
-                        "svmProbFacenet":svmProbFn,   
+                        "svmProbFacenet":str(svmProbFn),   
                         "lblFacenet":lblFn,
-                        "valFacenet":valFn
+                        "valFacenet":str(valFn)
                         })
                     
                 if(len(tempJson)>0):             
