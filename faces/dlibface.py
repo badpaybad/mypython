@@ -1389,8 +1389,8 @@ class CameraCapturer:
                     t1=datetime.datetime.now().timestamp()
                     frame = self._frameQueueToDetect.get()
                     #print("begin detect")
-                    #foundFace = self.detector.detect_face(frame)
-                    foundFace=self.opencvDetector.detect_face(frame)
+                    foundFace = self.detector.detect_face(frame)
+                    #foundFace=self.opencvDetector.detect_face(frame)
 
                     t2=datetime.datetime.now().timestamp()
                     print("face detect: {}".format(t2-t1))
@@ -1399,8 +1399,8 @@ class CameraCapturer:
                         
                         (face_croped, region_face)=ffound
                         
-                        #cv2.imshow("croped",face_croped)
-                        #cv2.waitKey(1)
+                        cv2.imshow("croped",face_croped)
+                        cv2.waitKey(1)
 
                         self.dx0=region_face[0]
                         self.dy0=region_face[1]
@@ -1428,7 +1428,7 @@ class CameraCapturer:
                         print("face predict: {}".format(t2-t1))
 
                         print(svmProba)
-                        print(self.arrLabel)
+                        print(self.svmProbability)
 
                         if(len(resCompare)>0):
                             #print("comparing")
@@ -1487,8 +1487,8 @@ class CameraCapturer:
             # distanceDlib = round(np.float64(comparer.findEuclideanDistance(dupython, ducsharp)), 10)
             # print(distanceDlib)
 
-            #ffound=self.detector.detect_face(f)
-            ffound= self.opencvDetector.detect_face(f)
+            ffound=self.detector.detect_face(f)
+            #ffound= self.opencvDetector.detect_face(f)
             
             if(len(ffound)>0):
                 fcrop,rrect = ffound[0]
