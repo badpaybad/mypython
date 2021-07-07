@@ -1496,12 +1496,12 @@ class CameraCapturer:
 
                     resCompare=[]
                     for idx, fDec in enumerate( self.arrVectorDlib):
-                        distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                        distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 5)
                         resCompare.append(distanceDlib)
                     
                     resCompareFacenet=[]
                     for idx, fDec in enumerate( self.arrVectorFacenet):
-                        distanceFn = round(np.float64(self.comparer.findCosineDistance(fDec, vectorFn)), 10)
+                        distanceFn = round(np.float64(self.comparer.findEuclideanDistance(fDec, vectorFn)), 5)
                         resCompareFacenet.append(distanceFn)                    
                     
                     (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)
@@ -1564,10 +1564,10 @@ class CameraCapturer:
         tanh = cv2.imread(currentDir+"/imgtest/aantt.png")
 
         listFaceImg=[du,du1,lien,lien1,lien2,tanh]
+        self.arrLabel=["du","du","lien","lien","lien","tanh"]
+        
         self.arrVectorDlib=[]
         self.arrVectorFacenet=[]
-        self.arrLabel=["du","du","lien","lien","lien","tanh"]
-
         # init data
         for f in listFaceImg:
             
