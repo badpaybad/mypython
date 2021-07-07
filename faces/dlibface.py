@@ -124,6 +124,23 @@ class DlibResNet:
         img_representation = np.expand_dims(img_representation, axis=0)
 
         return img_representation
+    
+    def face_vector(self,img_face_croped):
+       
+        vector=self.predict(self.normalize_face(img_face_croped, 150, 150))[0].tolist()
+        return vector
+    
+    def normalize_face(self,img, w, h):
+        img = cv2.resize(img, (w, h))
+        img_pixels = image.img_to_array(img)
+        img_pixels = np.expand_dims(img_pixels, axis=0)
+        #tf.squeeze(img_pixels)
+        img_pixels /= 255  # normalize input in [0, 1]
+        #print(img_pixels.shape)
+        #print(img_pixels.ndim)
+        #print(img_pixels)
+        return img_pixels
+        pass
 
 class FaceNet:
     def __init__(self):
@@ -1035,6 +1052,23 @@ class FaceNet:
     def predict(self, img_aligned):
         return self.__model.predict(img_aligned)
         pass
+    def face_vector(self,img_face_croped):
+        vectorFacenet = self.predict(self.normalize_face(img_face_croped, 160, 160))[0].tolist()
+
+        return vectorFacenet
+    
+    def normalize_face(self,img, w, h):
+        img = cv2.resize(img, (w, h))
+        img_pixels = image.img_to_array(img)
+        img_pixels = np.expand_dims(img_pixels, axis=0)
+        #tf.squeeze(img_pixels)
+        img_pixels /= 255  # normalize input in [0, 1]
+        #print(img_pixels.shape)
+        #print(img_pixels.ndim)
+        #print(img_pixels)
+        return img_pixels
+        pass
+                   
 
 class DlibDetector:
     def __init__(self):
@@ -1214,11 +1248,20 @@ class VectorCompare:
 class SvmFaceClassifier:
     def __init__(self, vectors=[], labels=[]):
         self.model = SVC(kernel='linear', probability=True)
+        self.faceVectors=vectors
+        self.faceLabels=labels
 
     def Train(self,vectors=[], labels=[]):
+        """[summary]
+
+        Args:
+            vectors [[],[]]: [same length and order to labels]. Defaults to [].
+            labels ['a','b']: [same length and order to vectors]. Defaults to [].
+        """
+        if(len(vectors)>0 ):
+            self.faceVectors = vectors
+            self.faceLabels = labels        
         
-        self.faceVectors = vectors
-        self.faceLabels = labels        
         self.model.fit(self.faceVectors, self.faceLabels)
 
         pass
@@ -1240,9 +1283,32 @@ class SvmFaceClassifier:
         #result = loaded_model.score(X_test, Y_test)
     
     def PredictProba(self, vector):
-        return self.model.predict_proba(vector)
-        #return self.model.predict(vector)
+        """[summary]
+
+        Args:
+            vector ([type]): [array of 128 item of face encoding]
+
+        Returns:
+            [type]: [description]
+        """
+        return self.model.predict_proba([vector])
         pass
+    
+    def Predict(self,vector):
+        """[summary]
+
+        Args:
+            vector ([type]): [array of 128 item of face encoding]
+        """
+        svmProba =self.PredictProba(vector)[0].tolist()
+
+        svmMaxDistanceIdx = np.argmax(svmProba)
+
+        svmResult =self.faceLabels[svmMaxDistanceIdx]
+        svmProbability=str( svmProba[svmMaxDistanceIdx])
+        
+        return(svmResult,svmProbability)
+        
 
 class CameraCapturer:
     
@@ -1263,25 +1329,18 @@ class CameraCapturer:
                     frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
 
                 queueDisplay.put(frame)
-                #cv2.imwrite("test.jpg", frame)
-                #break
-                # xxx= opencv.detect_face(frame)
-                # for x in xxx:
-                #     region_face=x[1]
-                #     dx0=region_face[0]
-                #     dy0=region_face[1]
-                #     dx1=region_face[0]+region_face[2]
-                #     dy1=region_face[1]+region_face[3]
-
-                #     cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-                #     cv2.imshow("1123",frame)
-                #     cv2.waitKey(1)
-                # continue
-
+               
                 x = datetime.datetime.now().timestamp()
                 if(x - lasttime>0.5):
-                    print('put frame to detect at: {} with fps {}, frame width {}'.format(x,fps, width))
+                    qsize=queueToDetect.qsize()
+                    skip= qsize-5
+                    if(skip>0):                 
+                        for i in range(0,skip):
+                            try:
+                                queueToDetect.get(False)                           
+                            except Exception:
+                                pass
+                    #print('put frame to detect at: {} with fps {}, frame width {}'.format(x,fps, width))
                     lasttime=x
                     queueToDetect.put(frame)
 
@@ -1313,7 +1372,7 @@ class CameraCapturer:
                 if(qsize>0):
                     for i in range(0,qsize):
                         try:
-                            qit=queueDetected.get()
+                            qit=queueDetected.get(False)
                             
                             if(qit != Empty):
                                 print("lastJson: "+ qit)
@@ -1333,8 +1392,30 @@ class CameraCapturer:
 
                         cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-                        cv2.putText(frame, "{} {} svm:{} : {}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"],detected["svmProbability"])
+                        cv2.putText(frame, "{} {} dl: {} : {}".format(detected["lblDlib"],detected["valDlib"],
+                                                            detected["svmLblDlib"],detected["svmProbDlib"])
                                         ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                        
+                        cv2.putText(frame, "{} {} fn: {} : {}".format(detected["lblFacenet"],detected["valFacenet"],
+                                                            detected["svmLblFacenet"],detected["svmProbFacenet"])
+                                        ,(dx0 - dx0,dy1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                        
+                        """
+                       tempJson.append({
+                        "dx0":dx0,
+                        "dy0":dy0,
+                        "dx1":dx1,
+                        "dy1":dy1,
+                        "svmLblDlib":svmLblDlib,
+                        "svmProbDlib":svmProbDlib,
+                        "lblDlib":lblDlib ,                   
+                        "valDlib":valDlib,
+                        "svmLblFacenet":svmLblFn,
+                        "svmProbFacenet":svmProbFn,   
+                        "lblFacenet":lblFn,
+                        "valFacenet":valFn
+                        })
+                        """
                 
                 cv2.imshow('frame', frame)       
 
@@ -1362,22 +1443,14 @@ class CameraCapturer:
         self.faceNetEncoder = FaceNet()
         self.comparer = VectorCompare()
         
-        self.svmFaceClassifier = SvmFaceClassifier()
+        self.svmFaceClassifierDlib = SvmFaceClassifier()
+        
+        self.svmFaceClassifierFacenet = SvmFaceClassifier()
 
-        self.arrVector=[]
+        self.arrVectorDlib=[]
+        self.arrVectorFacenet=[]
         self.arrLabel=[]        
-
-        self.dx0=0
-        self.dy0=0
         
-        self.dx1=0
-        self.dy1=0
-        
-        self.svmProbability=""
-        self.svmResult=""
-        self.minDistanceIdx = 0
-        self.minDistanceVal = ""
-        self.minDistanceLbl=""        
         self.lastJsonDetected=""
         
         self._frameThread = Process(target=CameraCapturer.GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
@@ -1392,76 +1465,82 @@ class CameraCapturer:
         while(True):
             try:                    
                 tempJson=[]
-                
-                if(self._frameQueueToDetect.qsize()>1):
-                    #t1=datetime.datetime.now().timestamp()
-                    frame = self._frameQueueToDetect.get()
-                    #print("begin detect")
-                    foundFace = self.detector.detect_face(frame)
-                    #foundFace=self.opencvDetector.detect_face(frame)
-
-                    #t2=datetime.datetime.now().timestamp()
-                    #print("face detect: {}".format(t2-t1))
-
-                    for ffound in foundFace:                   
+                qsize=self._frameQueueToDetect.qsize()
+                skip= qsize-5
+                if(skip>0):       
+                    #print("skip {}".format(skip))            
+                    for i in range(0,skip):
+                        try:
+                            self._frameQueueToDetect.get(False)                           
+                        except Exception:
+                            pass
                         
-                        (face_croped, region_face)=ffound
+                frame= self._frameQueueToDetect.get()
+            
+                foundFace = self.detector.detect_face(frame)
+                #foundFace=self.opencvDetector.detect_face(frame)
+                for ffound in foundFace:                   
+                    
+                    (face_croped, region_face)=ffound
+                    
+                    #cv2.imshow("croped",face_croped)
+                    #cv2.waitKey(1)
+
+                    dx0=region_face[0]
+                    dy0=region_face[1]
+                    dx1=region_face[0]+region_face[2]
+                    dy1=region_face[1]+region_face[3]
+
+                    vector= self.encoderDlib.face_vector(face_croped)
+                    vectorFn= self.faceNetEncoder.face_vector(face_croped)
+
+                    resCompare=[]
+                    for idx, fDec in enumerate( self.arrVectorDlib):
+                        distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
+                        resCompare.append(distanceDlib)
+                    
+                    resCompareFacenet=[]
+                    for idx, fDec in enumerate( self.arrVectorFacenet):
+                        distanceFn = round(np.float64(self.comparer.findCosineDistance(fDec, vectorFn)), 10)
+                        resCompareFacenet.append(distanceFn)                    
+                    
+                    (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)
+                                        
+                    (svmLblFn,svmProbFn) =self.svmFaceClassifierFacenet.Predict(vector)
+                   
+
+                    if(len(resCompare)>0):
+                        #print("comparing")
+                        resCompare=np.array(resCompare)
+                        idxDlib = np.argmin( resCompare)
+                        valDlib =str( resCompare[idxDlib])
+                        lblDlib=self.arrLabel[idxDlib]
                         
-                        #cv2.imshow("croped",face_croped)
-                        #cv2.waitKey(1)
+                        resCompareFacenet= np.array(resCompareFacenet)
+                        idxFn= np.argmin(resCompareFacenet)
+                        valFn= str(resCompareFacenet[idxFn])
+                        lblFn= self.arrLabel[idxFn]
 
-                        self.dx0=region_face[0]
-                        self.dy0=region_face[1]
-                        self.dx1=region_face[0]+region_face[2]
-                        self.dy1=region_face[1]+region_face[3]
-                        t1=datetime.datetime.now().timestamp()
-                        vector=self.encoderDlib.predict(self.detector.normalize_face(face_croped, 150, 150))[0].tolist()
-                        #t2=datetime.datetime.now().timestamp()
-                        #print("face encoding: {}".format(t2-t1))
-
-                        #t1=datetime.datetime.now().timestamp()
-                        resCompare=[]
-                        for idx, fDec in enumerate( self.arrVector):
-                            distanceDlib = round(np.float64(self.comparer.findCosineDistance(fDec, vector)), 10)
-                            resCompare.append(distanceDlib)
-                        
-                        svmProba =self.svmFaceClassifier.PredictProba([vector])[0].tolist()
-
-                        svmMaxDistanceIdx = np.argmax(svmProba)
-
-                        self.svmResult =self.arrLabel[svmMaxDistanceIdx]
-                        self.svmProbability=str( svmProba[svmMaxDistanceIdx])
-    
-
-                        #t2=datetime.datetime.now().timestamp()
-                        #print("face predict: {}".format(t2-t1))
-
-                        print(svmProba)
-                        print(self.svmProbability)
-
-                        if(len(resCompare)>0):
-                            #print("comparing")
-                            resCompare=np.array(resCompare)
-                            self.minDistanceIdx = np.argmin( resCompare)
-                            self.minDistanceVal =str( resCompare[self.minDistanceIdx])
-                            self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
-
-                            tempJson.append({
-                            "dx0":self.dx0,
-                            "dy0":self.dy0,
-                            "dx1":self.dx1,
-                            "dy1":self.dy1,
-                            "svmResult":self.svmResult,
-                            "svmProbability":self.svmProbability,
-                            "minDistanceLbl":self.minDistanceLbl ,                   
-                            "minDistanceVal":self.minDistanceVal
-                            })
-                        
+                        tempJson.append({
+                        "dx0":dx0,
+                        "dy0":dy0,
+                        "dx1":dx1,
+                        "dy1":dy1,
+                        "svmLblDlib":svmLblDlib,
+                        "svmProbDlib":svmProbDlib,
+                        "lblDlib":lblDlib ,                   
+                        "valDlib":valDlib,
+                        "svmLblFacenet":svmLblFn,
+                        "svmProbFacenet":svmProbFn,   
+                        "lblFacenet":lblFn,
+                        "valFacenet":valFn
+                        })
+                    
                 if(len(tempJson)>0):             
                     self.lastJsonDetected=json.dumps(tempJson)
                                                                 
                     self._queueDetected.put(self.lastJsonDetected)  
-                    print("putted to queue: {} detected: {}".format(self._queueDetected.qsize(), self.lastJsonDetected))     
+                    print("putted to queue: {} need to detecte: {}".format(self._frameQueueToDetect.qsize(), self.lastJsonDetected))     
                         
             except Exception as ex:
                 print("Error detect")
@@ -1485,7 +1564,8 @@ class CameraCapturer:
         tanh = cv2.imread(currentDir+"/imgtest/aantt.png")
 
         listFaceImg=[du,du1,lien,lien1,lien2,tanh]
-        self.arrVector=[]
+        self.arrVectorDlib=[]
+        self.arrVectorFacenet=[]
         self.arrLabel=["du","du","lien","lien","lien","tanh"]
 
         # init data
@@ -1505,20 +1585,17 @@ class CameraCapturer:
             
             if(len(ffound)>0):
                 fcrop,rrect = ffound[0]
-                xxxVector =self.encoderDlib.predict(self.detector.normalize_face(fcrop, 150, 150)) #[[]]
-                # for x in xxxVector:
-
-                #     f = open("demofile21.txt", "a")
-                #     f.write(json.dumps(x.tolist()))
-                #     f.write("\r\n\r\n")
-                #     f.write(json.dumps(xxxVector.tolist()))
-                #     f.close()
-                # exit()
-                vector=xxxVector[0].tolist()#[[]]
-                self.arrVector.append(vector)                
+                vector =self.encoderDlib.face_vector(fcrop) #[[]]
+                vectorFn= self.faceNetEncoder.face_vector(fcrop)
+                
+                self.arrVectorDlib.append(vector)           
+                self.arrVectorFacenet.append(vectorFn)     
         
-        self.svmFaceClassifier.Train(self.arrVector, self.arrLabel)
-        self.svmFaceClassifier.SaveModel()
+        self.svmFaceClassifierDlib.Train(self.arrVectorDlib, self.arrLabel)
+        self.svmFaceClassifierDlib.SaveModel()
+                
+        self.svmFaceClassifierFacenet.Train(self.arrVectorFacenet, self.arrLabel)
+        self.svmFaceClassifierFacenet.SaveModel()
 
         pass
 
