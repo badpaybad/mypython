@@ -30,6 +30,7 @@ import json
 
 import threading
 from multiprocessing import Process, Queue
+from queue import Empty,Full
 import datetime
 import time
 
@@ -1284,94 +1285,91 @@ class UnitTest:
 
         cv2.destroyAllWindows()       
 
-#UnitTest().Run()
-
-# dlibDetector=DlibDetector()
-# imgXxx= dlibDetector.normalize_face(cv2.imread("./imgtest/du.png"),150,150)
-# imgXxx = tf.squeeze(imgXxx)
-# plt.imshow(imgXxx)
-# plt.waitforbuttonpress()
-
-# imgXxx=  dlibDetector.normalize(cv2.imread("./imgtest/du.png"))
-# plt.imshow(imgXxx)
-# plt.waitforbuttonpress()
-
-# cv2.imshow("normalize",dlibDetector.normalize(cv2.imread("./imgtest/du.png")))
-# cv2.waitKey()
-# exit()
-def GetFrame( queueToDetect, queueDisplay, cameraUrl):
-        
-    vid = cv2.VideoCapture(cameraUrl)
-    lasttime=datetime.datetime.now().timestamp()
-    print("Begin get frame: "+ str(lasttime))
-    while (True):
-        try:     
-            ret, frame = vid.read()
-
-            queueDisplay.put(frame)
-            
-            x = datetime.datetime.now().timestamp()
-            if(x - lasttime>1):
-                print('put frame to detect: '+ str(x))
-                lasttime=x
-                queueToDetect.put(frame)
-
-        except Exception as ex :
-            #print(ex)
-            pass
-        finally:
-            #time.sleep(0.0001)
-            pass
-
-def ShowFrame(queueDisplay, queueDetected ):
-    
-    lastDetecteds=[]
-    
-    while(True):
-        try:
-            frame = queueDisplay.get()
-
-            cv2.putText(frame, "Press 'q' to quit"
-                ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
-
-            qsize =queueDetected.qsize()
-            if(qsize>0):
-                for i in range(0,qsize):
-                    jsonDetected= queueDetected.get()               
-                
-                lastDetecteds = json.loads(jsonDetected)              
-                
-            print("drawing")
-            print(lastDetecteds)
-            
-            for detected in lastDetecteds:
-                dx0=int(detected["dx0"])
-                dy0=int(detected["dy0"])
-                dx1=int(detected["dx1"])
-                dy1=int(detected["dy1"])
-
-                cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-                cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"])
-                                ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
-            
-
-            cv2.imshow('frame', frame)            
-            # the 'q' button is set as the # quitting button you may use any # desired button of your choice
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        except Exception as ex:
-            #print(ex)
-            pass
-        finally:
-            #time.sleep(0.0001)
-            pass
-    
-    # Destroy all the windows
-    cv2.destroyAllWindows()         
-
 class CameraCapturer:
+    
+    @staticmethod
+    def GetFrame( queueToDetect, queueDisplay, cameraUrl):
+        
+        vid = cv2.VideoCapture(cameraUrl)
+        lasttime=datetime.datetime.now().timestamp()
+        print("Begin get frame: "+ str(lasttime))
+        while (True):
+            try:     
+                ret, frame = vid.read()
+
+                queueDisplay.put(frame)
+                
+                x = datetime.datetime.now().timestamp()
+                if(x - lasttime>1):
+                    #print('put frame to detect: '+ str(x))
+                    lasttime=x
+                    queueToDetect.put(frame)
+
+            except Exception as ex:
+                print("Error get frame")
+                print(ex)
+                pass
+            finally:
+                #time.sleep(0.0001)
+                pass
+
+    @staticmethod        
+    def ShowFrame(queueDisplay, queueDetected ):
+        
+        lastDetecteds=[]
+
+        while(True):
+            try:
+                frame = queueDisplay.get()
+
+                cv2.putText(frame, "Press 'q' to quit"
+                    ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
+                # the 'q' button is set as the # quitting button you may use any # desired button of your choice
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+                lastJson=""
+                qsize=queueDetected.qsize()
+                if(qsize>0):
+                    for i in range(0,qsize):
+                        try:
+                            qit=queueDetected.get()
+                            
+                            if(qit != Empty):
+                                print("lastJson: "+ qit)
+                                lastJson= qit                        
+                        except Exception:                        
+                            continue
+
+                if(lastJson!=""):
+                    lastDetecteds = json.loads(lastJson)
+
+                if(len(lastDetecteds)>0) :                    
+                    for detected in lastDetecteds:
+                        dx0=int(detected["dx0"])
+                        dy0=int(detected["dy0"])
+                        dx1=int(detected["dx1"])
+                        dy1=int(detected["dy1"])
+
+                        cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
+
+                        cv2.putText(frame, "{} {} svm:{}".format(detected["minDistanceLbl"],detected["minDistanceVal"], detected["svmResult"])
+                                        ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                
+                cv2.imshow('frame', frame)       
+
+            except Exception as ex:
+                print("Some error showing video")
+                print(ex)
+                time.sleep(1)
+                pass
+            finally:
+                time.sleep(0.0001)
+                pass
+        
+        # Destroy all the windows
+        cv2.destroyAllWindows()   
+
     def __init__(self, cameraUrl) :
         self._frameQueueToDetect = Queue()
         self._frameQueueDisplay = Queue()
@@ -1397,14 +1395,13 @@ class CameraCapturer:
         self.svmResult=""
         self.minDistanceIdx = 0
         self.minDistanceVal = ""
-        self.minDistanceLbl=""
-        
+        self.minDistanceLbl=""        
         self.lastJsonDetected=""
         
         self.InitDataTest()
 
-        self._frameThread = Process(target=GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
-        self._faceThread = Process(target=ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
+        self._frameThread = Process(target=CameraCapturer.GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._faceThread = Process(target=CameraCapturer.ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
         
         pass
 
@@ -1413,17 +1410,13 @@ class CameraCapturer:
         self._faceThread.start()
         
         while(True):
-            try:
-                
-                if(self.lastJsonDetected!=""):                   
-                    self._queueDetected.put(self.lastJsonDetected)    
-                    
+            try:                    
                 tempJson=[]
                 
                 if(self._frameQueueToDetect.qsize()>1):
-                               
+
                     frame = self._frameQueueToDetect.get()
-                    print("begin detect")
+                    #print("begin detect")
                     foundFace = self.detector.detect_face(frame)
                     
                     for ffound in foundFace:                   
@@ -1444,12 +1437,12 @@ class CameraCapturer:
                         self.svmResult =str( self.svmFaceClassifier.Predict([vector]))
                             
                         if(len(resCompare)>0):
-                            print("comparing")
+                            #print("comparing")
                             resCompare=np.array(resCompare)
                             self.minDistanceIdx = np.argmin( resCompare)
                             self.minDistanceVal =str( resCompare[self.minDistanceIdx])
                             self.minDistanceLbl=self.arrLabel[self.minDistanceIdx]
-                           
+
                             tempJson.append({
                             "dx0":self.dx0,
                             "dy0":self.dy0,
@@ -1459,25 +1452,22 @@ class CameraCapturer:
                             "minDistanceLbl":self.minDistanceLbl ,                   
                             "minDistanceVal":self.minDistanceVal
                             })
-                            
-                    print(str(len(tempJson)) +" detected") 
-                            
                         
                 if(len(tempJson)>0):             
                     self.lastJsonDetected=json.dumps(tempJson)
-                    print(self.lastJsonDetected)
-                
-                    if(self.lastJsonDetected!=""):                   
-                        self._queueDetected.put(self.lastJsonDetected)       
+                                                                
+                    self._queueDetected.put(self.lastJsonDetected)  
+                    print("putted to queue: {} detected: {}".format(self._queueDetected.qsize(), self.lastJsonDetected))     
                         
             except Exception as ex:
-                #print(ex)
+                print("Error detect")
+                print(ex)
+                time.sleep(1)
                 pass
             finally:
                 #time.sleep(0.0001)
                 pass
     
-
     def InitDataTest(self):
         currentDir = os.path.dirname(os.path.realpath(__file__))
         du = cv2.imread(currentDir+"/imgtest/du.png")
@@ -1519,8 +1509,6 @@ class CameraCapturer:
         self.svmFaceClassifier.SaveModel()
 
         pass
-
-
 
 cameraCap= CameraCapturer(0)
 
