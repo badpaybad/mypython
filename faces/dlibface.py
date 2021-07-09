@@ -1247,6 +1247,7 @@ class VectorCompare:
 
 class SvmFaceClassifier:
     def __init__(self, vectors=[], labels=[]):
+        #self.model = SVC(kernel='rbf', probability=True,gamma='auto')
         self.model = SVC(kernel='linear', probability=True)
         self.faceVectors=vectors
         self.faceLabels=labels
@@ -1262,7 +1263,7 @@ class SvmFaceClassifier:
             self.faceVectors = vectors
             self.faceLabels = labels        
         
-        self.model.fit(self.faceVectors, self.faceLabels)
+        self.model.fit(np.array( self.faceVectors), np.array(self.faceLabels))
 
         pass
 
@@ -1274,12 +1275,15 @@ class SvmFaceClassifier:
 
         pickle.dump(self.model,open(modelPath, 'wb'))
     
-    def LoadModel(self,modelPath="" ):
+    def LoadModel(self,modelPath="",labels=[] ):
         self.__FileFolder = os.path.dirname(os.path.realpath(__file__))
         if(modelPath==""):
             modelPath= self.__FileFolder+"/svm.pkl"
-
+        
         self.model = pickle.load(open(modelPath, 'rb'))
+        
+        self.faceLabels = self.model.classes_ 
+
         #result = loaded_model.score(X_test, Y_test)
     
     def PredictProba(self, vector):
@@ -1291,8 +1295,9 @@ class SvmFaceClassifier:
         Returns:
             [type]: [description]
         """
-        return self.model.predict_proba([vector])
-        pass
+        probs= self.model.predict_proba([vector])
+        
+        return probs
     
     def Predict(self,vector):
         """[summary]
@@ -1300,15 +1305,25 @@ class SvmFaceClassifier:
         Args:
             vector ([type]): [array of 128 item of face encoding]
         """
-        svmProba =self.PredictProba(vector)[0].tolist()
+        try:
+            probs =self.model.predict_proba([vector])[0]
+            #print("-------------------")
+            #print(self.model.predict([vector]))
 
-        svmMaxDistanceIdx = np.argmax(svmProba)
+            svmMaxDistanceIdx = np.argmax(probs)
+            
+            svmResult =self.faceLabels[svmMaxDistanceIdx]
+            
+            svmProbability= round( np.float32( probs[svmMaxDistanceIdx]),3)
+            
+            return(svmResult,svmProbability)
 
-        svmResult =self.faceLabels[svmMaxDistanceIdx]
-        svmProbability=round( np.float32( svmProba[svmMaxDistanceIdx]),5)
-        
-        return(svmResult,svmProbability)
-        
+        except Exception as ex:
+            print("Error: SvmFaceClassifier.Predict")
+            print(ex)
+            return(None,None)
+            pass
+
 
 class CameraCapturer:
     
