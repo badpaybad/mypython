@@ -1397,13 +1397,6 @@ class CameraCapturer:
                     
                     print('Puting frame to detect at: {} with fps {}, frame width {} frame count to detect {}'.format(timeNow,fps, width,qsize))
 
-                    skip= qsize-5
-                    if(skip>0):                 
-                        for i in range(0,skip):
-                            try:
-                                queueToDetect.get(False)                           
-                            except Exception:
-                                pass
                     queueToDetect.put(frame)
                     lasttime=timeNow
 
@@ -1516,24 +1509,35 @@ class CameraCapturer:
         # Destroy all the windows
         cv2.destroyAllWindows()   
  
+    @staticmethod
+    def adjust_gamma(image, gamma=1.0):
+        # build a lookup table mapping the pixel values [0, 255] to
+        # their adjusted gamma values
+        invGamma = 1.0 / gamma
+        table = np.array([((i / 255.0) ** invGamma) * 255
+            for i in np.arange(0, 256)]).astype("uint8")
+
+        # apply gamma correction using the lookup table
+        return cv2.LUT(image, table)
+    
     @staticmethod  
     def LoopInfinityDetectFace(frameQueueToDetect,queueToPredict):      
         detector = DlibDetector()
 
         while(True):
-            try:                    
-                tempJson=[]
+            try:           
                 qsize=frameQueueToDetect.qsize()
-                skip= qsize-5
+                skip= qsize-3
                 if(skip>0):       
                     #print("skip {}".format(skip))            
                     for i in range(0,skip):
                         try:
-                            frameQueueToDetect.get(False)                           
+                            frame=frameQueueToDetect.get(False)                           
                         except Exception:
                             pass
-                        
-                frame= frameQueueToDetect.get()
+                else:        
+                    frame= frameQueueToDetect.get()
+                    
                 orginalFrame = frame.copy()
 
                 height, width, channels = frame.shape 
@@ -1545,10 +1549,22 @@ class CameraCapturer:
                     
                 else :
                     ratio=1
-                            
-                foundFace = detector.detect_face(frame)                
+                
+                frame15= CameraCapturer.adjust_gamma(frame,1.5)
+                # cv2.imshow("gamar correct",frame)
+                # cv2.waitKey(1)
+                foundFace = detector.detect_face(frame15)  
+                              
+                if(len(foundFace)==0):
+                    frame05= CameraCapturer.adjust_gamma(frame,0.5)                    
+                    foundFace = detector.detect_face(frame05) 
+                               
+                if(len(foundFace)==0):
+                    foundFace = detector.detect_face(frame)      
 
                 queueToPredict.put((orginalFrame,ratio,foundFace))
+                
+                #queueToPredict.put((frame,1,foundFace))
                         
             except Exception as ex:
                 print("Error LoopInfinityDetectFace")
@@ -1556,7 +1572,7 @@ class CameraCapturer:
                 time.sleep(1)
                 pass
             finally:
-                time.sleep(0.001)
+                time.sleep(0.3)
                 pass            
 
     def __init__(self, cameraUrl) :
