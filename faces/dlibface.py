@@ -1661,8 +1661,6 @@ class CameraCapturer:
                         nowTime =datetime.datetime.now().timestamp()       
                         fileName=lblPredictCombine+"_"+str(nowTime)+".jpg"
 
-                        fileImgPub="D:/published/koattendance/wwwroot/"+fileName
-
                         #left = d.left()#x0
                         #right = d.right()#x1
                         #top = d.top()#y0
@@ -1677,8 +1675,6 @@ class CameraCapturer:
                         except:
                             pass
                         
-                        urlImgPub="http://118.70.117.208:8888/"+fileName
-
                         self.last_sent_notification[lblPredictCombine]= nowTime
                        
             return (
