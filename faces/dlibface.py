@@ -1,5 +1,6 @@
 #ref: https://github.com/serengil/deepface.git
 from ast import dump
+import multiprocessing
 from tensorflow.keras import backend as K
 from tensorflow.keras.layers import add
 from tensorflow.keras.layers import MaxPooling2D
@@ -14,15 +15,11 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import Activation
 from tensorflow.keras.models import Model
 import os
-import zipfile
 import bz2
-
 import cv2
 import gdown
 import numpy as np
 from pathlib import Path
-import json
-import matplotlib.pyplot as plt
 
 from sklearn.svm import SVC
 import pickle
@@ -30,11 +27,15 @@ import json
 
 import threading
 from multiprocessing import Process, Queue
+from threading import Thread
 from queue import Empty,Full
 import datetime
 import time
 
+import joblib
+
 import tensorflow as tf
+
 tf_version = int(tf.__version__.split(".")[0])
 
 if tf_version == 1:
@@ -61,7 +62,6 @@ except:
     # Disable all GPUS
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     pass
-
 
 class DlibMetaData:
     def __init__(self):
@@ -1068,7 +1068,6 @@ class FaceNet:
         #print(img_pixels)
         return img_pixels
         pass
-                   
 
 class DlibDetector:
     def __init__(self):
@@ -1095,19 +1094,17 @@ class DlibDetector:
             # newfilepath = output[:-4]  # discard .bz2 extension
             open(self.file_weights, 'wb').write(data)
 
-        face_detector = dlib.get_frontal_face_detector()
+        self.face_detector = dlib.get_frontal_face_detector()
+        
+        self.object_detector = dlib.full_object_detections()
 
-        sp = dlib.shape_predictor(self.file_weights)
+        self.shape_predict = dlib.shape_predictor(self.file_weights)
 
-        detector = {}
-        detector["face_detector"] = face_detector
-        detector["sp"] = sp
-        self.detector = detector
         pass
 
-    def detect_face(self, imgInput, align=True):
+    def detect_face(self, imgInput, align=True,padding=0.22):
         """[summary]
-
+        http://dlib.net/face_alignment.py.html
         Args:
             imgInput ([type]): [cv2.imread]
             align (bool, optional): [description]. Defaults to True.
@@ -1116,33 +1113,33 @@ class DlibDetector:
             [type]: [List of tuple(face,rect)]
         """
         import dlib  # this requirement is not a must that's why imported here
-        detector = self.detector
-        sp = detector["sp"]
+        
         #print(sp)
         #exit(0)
         #img_region = [0, 0, imgInput.shape[0], imgInput.shape[1]]
 
-        face_detector = detector["face_detector"]
-        detections = face_detector(imgInput, 1)
+        detections = self.face_detector(imgInput, 1)
         listDetected=[]
         
         if len(detections) > 0:
             for idx, d in enumerate(detections):                
-                left = d.left()
-                right = d.right()
-                top = d.top()
-                bottom = d.bottom()
+                left = d.left()#x0
+                right = d.right()#x1
+                top = d.top()#y0
+                bottom = d.bottom()#y1
                 detected_face = imgInput[top:bottom, left:right]
                 detected_face_region = [left, top, right - left, bottom - top]  
+                #                       x,y,w,h
                 #print(detected_face_region)          
                 if align:
-                    img_shape = sp(imgInput, d)
+                    img_shape = self.shape_predict(imgInput, d)
                     #print("img_shape")
                     #print(img_shape)
 
                     detected_face = dlib.get_face_chip(
-                        imgInput, img_shape, size=detected_face.shape[0])
-
+                        imgInput, img_shape, size=detected_face.shape[0],padding=padding)
+                    #cv2.imshow("face", detected_face)
+                    #cv2.waitKey(1)
                 listDetected.append((detected_face, detected_face_region))
 
         return listDetected
@@ -1169,56 +1166,6 @@ class DlibDetector:
             y = np.multiply(np.subtract(image, mean), 1 / std_adj)
             return y
 
-class OpenCvDetector:
-    def __init__(self):
-        self.__FileFolder = os.path.dirname(os.path.realpath(__file__))
-
-        self.file_weights = self.__FileFolder +    '/weights/haarcascade_frontalface_default.xml'
-        self.detector= cv2.CascadeClassifier(self.file_weights)
-        self.detectorLEye= cv2.CascadeClassifier(self.__FileFolder +    '/weights/haarcascade_lefteye_2splits.xml')
-        self.detectorREye= cv2.CascadeClassifier(self.__FileFolder +    '/weights/haarcascade_righteye_2splits.xml')
-        pass
-    def detect_face(self, imgInput, align=True):
-        
-        gray = cv2.cvtColor(imgInput, cv2.COLOR_BGR2GRAY)
-        
-        rects = self.detector.detectMultiScale(gray, scaleFactor=1.3,
-            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
-        
-        listDetected=[]
-        for (x, y, w, h) in rects:
-            #cv2.rectangle(imgInput, (x, y), (x + w, y + h), (255, 255,0, 255), 2)
-
-            detected_face=imgInput[y:y+h, x:x+w]
-
-            grayface =gray[y:y+h, x:x+w]
-
-            leyes = self.detectorLEye.detectMultiScale(grayface, scaleFactor=1.3,
-            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
-
-            reyes = self.detectorREye.detectMultiScale(grayface, scaleFactor=1.3,
-            minNeighbors=5, minSize=(5, 5),	flags=cv2.CASCADE_SCALE_IMAGE)
-
-            if(len(leyes)>0 or len(reyes)>0):
-                detected_face_region=(x,y,w,h)
-                listDetected.append((detected_face, detected_face_region))
-            
-        return listDetected
-        pass
-    
-    def normalize_face(self,img, w, h):
-        img = cv2.resize(img, (w, h))
-        img_pixels = image.img_to_array(img)
-        img_pixels = np.expand_dims(img_pixels, axis=0)
-        #tf.squeeze(img_pixels)
-        img_pixels /= 255  # normalize input in [0, 1]
-        #print(img_pixels.shape)
-        #print(img_pixels.ndim)
-        #print(img_pixels)
-        return img_pixels
-        pass
-
-
 class VectorCompare:
     def __init__(self):
         pass
@@ -1244,6 +1191,106 @@ class VectorCompare:
 
     def l2_normalize(self, x):
         return x / np.sqrt(np.sum(np.multiply(x, x)))
+    
+    def predictCosi(self,vector, arrayVectors, arrayLabels, takeTop=2, threshold=0):
+        try:
+            resCompare=[]
+            for idx, fDec in enumerate(arrayVectors):
+                distance = self.findCosineDistance(fDec, vector)            
+                if(threshold>0 and distance>threshold):
+                    continue
+                resCompare.append((arrayLabels[idx],distance))   
+
+
+            resCompare= sorted(resCompare,key= lambda tup:tup[1])
+            
+            resCompare=resCompare[:takeTop]
+            
+            lblArr={}
+            for (l,d) in resCompare:
+                lblArr[l]=d
+
+            if(len(lblArr)>1):
+                return (None,None)
+            
+            return (resCompare[0][0],round(resCompare[0][1],3))
+
+        except Exception as ex:
+            print("Error pridict cosi: ")
+            print(ex)
+            return (None,None)
+            pass
+    
+    def predictEcli(self,vector, arrayVectors, arrayLabels,takeTop=2, threshold=0):
+        try:
+            resCompare=[]
+            for idx, fDec in enumerate(arrayVectors):
+                distance = self.findEuclideanDistance(fDec, vector)            
+                if(threshold>0 and distance>threshold):
+                    continue
+                resCompare.append((arrayLabels[idx],distance))   
+
+            resCompare= sorted(resCompare,key= lambda tup:tup[1])[:takeTop]
+            
+            lblArr={}
+            for (l,d) in resCompare:
+                lblArr[l]=d
+
+            if(len(lblArr)>1):
+                return (None,None)
+            
+            return (resCompare[0][0],round(resCompare[0][1],3))
+
+        except Exception as ex:
+            print("Error pridict ecli: ")
+            print(ex)
+            return (None,None)
+            pass
+
+    def predictCosiByMin(self, vector, arrayVectors, arrayLabels):
+        """[summary]
+
+        Args:
+            vector ([type]): [description]
+            arrayVectors ([type]): [description]
+            arrayLabels ([type]): [description]
+
+        Returns:
+            [type]: (lbl,disntace)
+        """
+        resCompare=[]
+        for idx, fDec in enumerate(arrayVectors):
+            distance = self.findCosineDistance(fDec, vector)
+            resCompare.append(distance)
+
+        resCompare=np.array(resCompare)
+        idxDlib = np.argmin( resCompare)
+        minDistance =resCompare[idxDlib]
+        lbl=arrayLabels[idxDlib]
+        return (lbl,round( minDistance,3))
+    
+    def predictEcliByMin(self, vector, arrayVectors, arrayLabels):
+        """[summary]
+
+        Args:
+            vector ([type]): [description]
+            arrayVectors ([type]): [description]
+            arrayLabels ([type]): [description]
+
+        Returns:
+            [type]: (lbl,disntace)
+        """
+        resCompare=[]
+        for idx, fDec in enumerate(arrayVectors):
+            distance = self.findEuclideanDistance(fDec, vector)
+            resCompare.append(distance)
+
+        resCompare=np.array(resCompare)
+        idxDlib = np.argmin( resCompare)
+
+        minDistance =resCompare[idxDlib]
+        lbl=arrayLabels[idxDlib]
+        return (lbl,round( minDistance,3))
 
 class SvmFaceClassifier:
     def __init__(self, vectors=[], labels=[]):
@@ -1324,11 +1371,10 @@ class SvmFaceClassifier:
             return(None,None)
             pass
 
-
 class CameraCapturer:
     
     @staticmethod
-    def GetFrame( queueToDetect, queueDisplay, cameraUrl):
+    def LoopInfinityGetFrame( queueToDetect, queueDisplay, cameraUrl):
         #opencv = OpenCvDetector()
 
         vid = cv2.VideoCapture(cameraUrl)
@@ -1340,14 +1386,17 @@ class CameraCapturer:
                 fps = vid.get(cv2.CAP_PROP_FPS)
                 width  = vid.get(cv2.CAP_PROP_FRAME_WIDTH) 
                 
-                if(width>1800):
-                    frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
+                # if(width>1800):
+                #     frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
 
                 queueDisplay.put(frame)
-               
-                x = datetime.datetime.now().timestamp()
-                if(x - lasttime>0.5):
+
+                timeNow = datetime.datetime.now().timestamp()
+                if(timeNow - lasttime>0.3):
                     qsize=queueToDetect.qsize()
+                    
+                    print('Puting frame to detect at: {} with fps {}, frame width {} frame count to detect {}'.format(timeNow,fps, width,qsize))
+
                     skip= qsize-5
                     if(skip>0):                 
                         for i in range(0,skip):
@@ -1355,26 +1404,30 @@ class CameraCapturer:
                                 queueToDetect.get(False)                           
                             except Exception:
                                 pass
-                    #print('put frame to detect at: {} with fps {}, frame width {}'.format(x,fps, width))
-                    lasttime=x
                     queueToDetect.put(frame)
+                    lasttime=timeNow
 
             except Exception as ex:
-                print("Error get frame")
+                print("Error: LoopInfinityGetFrame get frame")
                 print(ex)
+                time.sleep(1)
                 pass
             finally:
-                #time.sleep(0.0001)
+                
                 pass
 
     @staticmethod        
-    def ShowFrame(queueDisplay, queueDetected ):
+    def LoopInfinityShowFrame(queueDisplay, queueDetected ):
         
         lastDetecteds=[]
 
         while(True):
             try:
                 frame = queueDisplay.get()
+                height, width, channels = frame.shape 
+
+                if(width>1800):
+                    frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
 
                 cv2.putText(frame, "Press 'q' to quit"
                     ,(10,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 255, 0, 255),  2) 
@@ -1382,77 +1435,139 @@ class CameraCapturer:
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-                lastJson=""
+                tempDetectedFaces=None
+
                 qsize=queueDetected.qsize()
                 if(qsize>0):
                     for i in range(0,qsize):
                         try:
-                            qit=queueDetected.get(False)
-                            
+                            qit=queueDetected.get(False)                            
                             if(qit != Empty):
-                                print("lastJson: "+ qit)
-                                lastJson= qit                        
-                        except Exception:                        
-                            continue
+                                tempDetectedFaces= qit                        
+                                
+                        except Exception as ex:    
+                            print("No item in queueDetected")                    
+                            print(ex)
+                            time.sleep(1)
+                            continue                    
+            
+                if(tempDetectedFaces!=None):
+                    lastDetecteds = tempDetectedFaces
 
-                if(lastJson!=""):
-                    lastDetecteds = json.loads(lastJson)
-
-                if(len(lastDetecteds)>0) :                    
+                if(len(lastDetecteds)>0) :     
+                    counter=0               
                     for detected in lastDetecteds:
-                        dx0=int(detected["dx0"])
-                        dy0=int(detected["dy0"])
-                        dx1=int(detected["dx1"])
-                        dy1=int(detected["dy1"])
-
+                        
+                        (
+            dx0, dy0, dx1, dy1, 
+            svmLblDlib, svmProbDlib,
+            lblDlib , valDlib,
+            lblDlibEcli , valDlibEcli,
+            svmLblFn, svmProbFn, 
+            lblFn,valFn,   
+            lblFnEcli, valFnEcli,
+            lblPredictCombine,
+            fileImgPub,
+            urlImgPub
+            ) = detected
+            
+                        posX= dx0
+                        if(counter%2==0):
+                            posX= dx0-dx0
+                        else:
+                            posX=dx0
+                        counter=counter+1
                         cv2.rectangle(frame,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
 
-                        cv2.putText(frame, "{} {} dl: {} : {}".format(detected["lblDlib"],detected["valDlib"],
-                                                            detected["svmLblDlib"],detected["svmProbDlib"])
-                                        ,(dx0 - dx0,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                        midDy0Dy1=int(dy0 +(dy1-dy0)/2)
                         
-                        cv2.putText(frame, "{} {} fn: {} : {}".format(detected["lblFacenet"],detected["valFacenet"],
-                                                            detected["svmLblFacenet"],detected["svmProbFacenet"])
-                                        ,(dx0 - dx0,dy1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  (255, 0, 0, 255), 2) 
+                        cv2.putText(frame, "{}".format(lblPredictCombine)
+                                        ,(posX,dy0- 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,0, 255, 0), 2) 
+
+                        cv2.putText(frame, "c: {} {} {} {}".format(lblDlib,valDlib,lblFn,valFn)
+                                        ,(posX,dy0), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,255, 255, 0), 1) 
+
+                        cv2.putText(frame, "c: {} {} {} {}".format(lblDlib,valDlib,lblFn,valFn)
+                                        ,(posX+1,dy0+1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,0, 255, 0), 1) 
+                                        
+                                        
+                        cv2.putText(frame, "e: {} {} {} {}".format(lblDlibEcli,valDlibEcli,lblFnEcli,valFnEcli)
+                                        ,(posX,midDy0Dy1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,255, 255, 0), 1)    
+                        cv2.putText(frame, "e: {} {} {} {}".format(lblDlibEcli,valDlibEcli,lblFnEcli,valFnEcli)
+                                        ,(posX+1,midDy0Dy1+1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,0, 255, 0), 1)                       
+
+
+                        cv2.putText(frame, "s: {} {} {} {}".format(svmLblDlib,svmProbDlib,svmLblFn,svmProbFn)
+                                        ,(posX,dy1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,255, 255, 0), 1) 
+                        cv2.putText(frame, "s: {} {} {} {}".format(svmLblDlib,svmProbDlib,svmLblFn,svmProbFn)
+                                        ,(posX+1,dy1+1), cv2.FONT_HERSHEY_SIMPLEX, 0.5,  ( 0,0, 255, 0), 1) 
                         
-                        """
-                       tempJson.append({
-                        "dx0":dx0,
-                        "dy0":dy0,
-                        "dx1":dx1,
-                        "dy1":dy1,
-                        "svmLblDlib":svmLblDlib,
-                        "svmProbDlib":svmProbDlib,
-                        "lblDlib":lblDlib ,                   
-                        "valDlib":valDlib,
-                        "svmLblFacenet":svmLblFn,
-                        "svmProbFacenet":svmProbFn,   
-                        "lblFacenet":lblFn,
-                        "valFacenet":valFn
-                        })
-                        """
-                
+                        
                 cv2.imshow('frame', frame)       
 
             except Exception as ex:
-                print("Some error showing video")
+                print("Error: LoopInfinityShowFrame")
                 print(ex)
                 time.sleep(1)
                 pass
             finally:
-                time.sleep(0.0001)
                 pass
         
         # Destroy all the windows
         cv2.destroyAllWindows()   
+ 
+    @staticmethod  
+    def LoopInfinityDetectFace(frameQueueToDetect,queueToPredict):      
+        detector = DlibDetector()
+
+        while(True):
+            try:                    
+                tempJson=[]
+                qsize=frameQueueToDetect.qsize()
+                skip= qsize-5
+                if(skip>0):       
+                    #print("skip {}".format(skip))            
+                    for i in range(0,skip):
+                        try:
+                            frameQueueToDetect.get(False)                           
+                        except Exception:
+                            pass
+                        
+                frame= frameQueueToDetect.get()
+                orginalFrame = frame.copy()
+
+                height, width, channels = frame.shape 
+
+                ratio=1
+                if(width>1800):                    
+                    ratio=2
+                    frame= cv2.resize(frame,(0,0),fx=0.5,fy=0.5)
+                    
+                else :
+                    ratio=1
+                            
+                foundFace = detector.detect_face(frame)                
+
+                queueToPredict.put((orginalFrame,ratio,foundFace))
+                        
+            except Exception as ex:
+                print("Error LoopInfinityDetectFace")
+                print(ex)
+                time.sleep(1)
+                pass
+            finally:
+                time.sleep(0.001)
+                pass            
 
     def __init__(self, cameraUrl) :
         self._frameQueueToDetect = Queue()
         self._frameQueueDisplay = Queue()
         self._queueDetected = Queue()
+        self._queueToPredict=Queue()
+
         self._cameraUrl=cameraUrl
 
-        self.opencvDetector =OpenCvDetector()        
+        #self.opencvDetector =OpenCvDetector()        
         self.detector = DlibDetector()
         self.encoderDlib = DlibResNet()
         self.faceNetEncoder = FaceNet()
@@ -1462,113 +1577,156 @@ class CameraCapturer:
         
         self.svmFaceClassifierFacenet = SvmFaceClassifier()
 
+        #self.livenessDetector =LivenessDetector()
+
+
         self.arrVectorDlib=[]
         self.arrVectorFacenet=[]
         self.arrLabel=[]        
         
-        self.lastJsonDetected=""
+        self.lastDetectedFaces=[]
+        self.last_sent_notification={}
         
-        self._frameThread = Process(target=CameraCapturer.GetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
-        self._faceThread = Process(target=CameraCapturer.ShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)
+        self._frameRetreiveFromCameraProcess = Process(target=CameraCapturer.LoopInfinityGetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
+        self._frameDetectFaceProcess =  Process(target=CameraCapturer.LoopInfinityDetectFace,args=(self._frameQueueToDetect,self._queueToPredict),  daemon=True)
+        self._framePredictThread =  Thread(target=self.LoopInfinityPredictFrame, args=(self._queueToPredict,self._queueDetected), daemon=True)
+        self._faceShowFrameRetreivedProcess = Process(target=CameraCapturer.LoopInfinityShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)                     
         
         pass
+    
+    def Start(self):
+        self._faceShowFrameRetreivedProcess.start()
+        self._framePredictThread.start()        
+        self._frameDetectFaceProcess.start()        
+        self._frameRetreiveFromCameraProcess.start()
 
-    def Run(self):
-        self._frameThread.start()
-        self._faceThread.start()
+        self._framePredictThread.join()
+
+    def Stop(self):
         
-        while(True):
-            try:                    
-                tempJson=[]
-                qsize=self._frameQueueToDetect.qsize()
-                skip= qsize-5
-                if(skip>0):       
-                    #print("skip {}".format(skip))            
-                    for i in range(0,skip):
+        self._frameRetreiveFromCameraProcess.terminate()
+        self._faceShowFrameRetreivedProcess.terminate()
+        self._framePredictThread.terminate()        
+        self._frameDetectFaceProcess.terminate()        
+    
+    def PredictFace(self,orginalFrame,ratio, face_croped, region_face):
+        try:
+            #(orginalFrame,ratio, face_croped, region_face) = inputTuple
+            #(propPrint,propRelay)=self.livenessDetector.Predict(face_croped)
+            #cv2.imshow("face found", face_croped)
+            #cv2.waitKey(1)
+
+            dx0=region_face[0]
+            dy0=region_face[1]
+            dx1=region_face[0]+region_face[2]
+            dy1=region_face[1]+region_face[3]
+
+            vector= self.encoderDlib.face_vector(face_croped)
+            vectorFn= self.faceNetEncoder.face_vector(face_croped)
+
+            # self.comparer.predictCosiByMin(vector,self.arrVectorDlib,self.arrLabel)
+            # self.comparer.predictEcliByMin(vector,self.arrVectorDlib,self.arrLabel)
+
+            (lblDlib,valDlib)= self.comparer.predictCosi(vector,self.arrVectorDlib,self.arrLabel )
+            (lblFn,valFn)= self.comparer.predictCosi(vectorFn,self.arrVectorFacenet,self.arrLabel )
+
+            (lblDlibEcli,valDlibEcli)= self.comparer.predictEcli(vector,self.arrVectorDlib,self.arrLabel )
+            (lblFnEcli,valFnEcli)= self.comparer.predictEcli(vectorFn,self.arrVectorFacenet,self.arrLabel )
+
+            (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)                                        
+            (svmLblFn,svmProbFn) =self.svmFaceClassifierFacenet.Predict(vectorFn)
+
+            lblPredictCombine=""
+            
+            faceBound= face_croped
+            fileImgPub=""
+            urlImgPub=""
+            if(lblDlib==lblDlibEcli and lblDlib==svmLblDlib):
+                if(valDlib<=0.05 and valDlibEcli<= 0.5 and svmProbDlib<0.85):
+                    lblPredictCombine=lblDlib
+                    allowSent =True
+                    
+                    if( lblPredictCombine in self.last_sent_notification.keys()):
+                        nowTime =datetime.datetime.now().timestamp()                                
+                        lastSent= self.last_sent_notification[lblPredictCombine]
+
+                        if(nowTime- lastSent>2):
+                            allowSent=True
+                        else:
+                            allowSent=False
+
+                    if(allowSent):
+                        nowTime =datetime.datetime.now().timestamp()       
+                        fileName=lblPredictCombine+"_"+str(nowTime)+".jpg"
+
+                        #left = d.left()#x0
+                        #right = d.right()#x1
+                        #top = d.top()#y0
+                        #bottom = d.bottom()#y1
                         try:
-                            self._frameQueueToDetect.get(False)                           
-                        except Exception:
+                            faceBound= orginalFrame[dy0*ratio-100:dy1*ratio+100, dx0*ratio-100:dx1*ratio+100]
+                        except:
+                            faceBound= face_croped
+                            pass
+                        try:
+                            cv2.imwrite(fileImgPub, faceBound)
+                        except:
                             pass
                         
-                frame= self._frameQueueToDetect.get()
-            
-                foundFace = self.detector.detect_face(frame)
-                #foundFace=self.opencvDetector.detect_face(frame)
-                for ffound in foundFace:                   
-                    
-                    (face_croped, region_face)=ffound
-                    
-                    #cv2.imshow("croped",face_croped)
-                    #cv2.waitKey(1)
+                        self.last_sent_notification[lblPredictCombine]= nowTime
+                       
+            return (
+            dx0, dy0, dx1, dy1, 
+            svmLblDlib, svmProbDlib,
+            lblDlib , valDlib,
+            lblDlibEcli , valDlibEcli,
+            svmLblFn, svmProbFn, 
+            lblFn,valFn,   
+            lblFnEcli, valFnEcli,
+            lblPredictCombine,
+            fileImgPub,
+            urlImgPub
+            )
 
-                    dx0=region_face[0]
-                    dy0=region_face[1]
-                    dx1=region_face[0]+region_face[2]
-                    dy1=region_face[1]+region_face[3]
+            pass
+        except Exception as ex:
+            print("Error PredictFace")
+            print(ex)
 
-                    vector= self.encoderDlib.face_vector(face_croped)
-                    vectorFn= self.faceNetEncoder.face_vector(face_croped)
+    def LoopInfinityPredictFrame(self,queueToPredict,queueDetected):
+        while (True):
+            try:
+                (orginalFrame,ratio,foundFace)= self._queueToPredict.get()
+                
+                tempFacesDetected=[]
 
-                    resCompare=[]
-                    for idx, fDec in enumerate( self.arrVectorDlib):
-                        distanceDlib = round(np.float32(self.comparer.findCosineDistance(fDec, vector)), 5)
-                        resCompare.append(distanceDlib)
+                # poolDataToPredict=[]
+                # for ffound in foundFace:
+                #     (face_croped, region_face)=ffound   
+                #     poolDataToPredict.append((orginalFrame,ratio,face_croped, region_face))
+
+                # poolPredicts= multiprocessing.Pool(multiprocessing.cpu_count())
+                # tempJson=poolPredicts.map(self.PredictFace, poolDataToPredict )
+
+                for ffound in foundFace:                             
+                    (face_croped, region_face)=ffound          
+                    tempFacesDetected.append( self.PredictFace(orginalFrame,ratio,face_croped, region_face))
                     
-                    resCompareFacenet=[]
-                    for idx, fDec in enumerate( self.arrVectorFacenet):
-                        distanceFn = round(np.float32(self.comparer.findEuclideanDistance(fDec, vectorFn)), 5)
-                        resCompareFacenet.append(distanceFn)                    
-                    
-                    (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)
-                                        
-                    (svmLblFn,svmProbFn) =self.svmFaceClassifierFacenet.Predict(vector)
-                   
-
-                    if(len(resCompare)>0):
-                        #print("comparing")
-                        resCompare=np.array(resCompare)
-                        idxDlib = np.argmin( resCompare)
-                        valDlib =resCompare[idxDlib]
-                        lblDlib=self.arrLabel[idxDlib]
-                        
-                        resCompareFacenet= np.array(resCompareFacenet)
-                        idxFn= np.argmin(resCompareFacenet)
-                        valFn= resCompareFacenet[idxFn]
-                        lblFn= self.arrLabel[idxFn]
-
-                        tempJson.append({
-                        "dx0":dx0,
-                        "dy0":dy0,
-                        "dx1":dx1,
-                        "dy1":dy1,
-                        "svmLblDlib":svmLblDlib,
-                        "svmProbDlib":str(svmProbDlib),
-                        "lblDlib":lblDlib ,                   
-                        "valDlib":str(valDlib),
-                        "svmLblFacenet":svmLblFn,
-                        "svmProbFacenet":str(svmProbFn),   
-                        "lblFacenet":lblFn,
-                        "valFacenet":str(valFn)
-                        })
-                    
-                if(len(tempJson)>0):             
-                    self.lastJsonDetected=json.dumps(tempJson)
+                if(len(tempFacesDetected)>0):             
+                    self.lastDetectedFaces=tempFacesDetected
                                                                 
-                    self._queueDetected.put(self.lastJsonDetected)  
-                    print("putted to queue: {} need to detecte: {}".format(self._frameQueueToDetect.qsize(), self.lastJsonDetected))     
-                        
+                    self._queueDetected.put(self.lastDetectedFaces)  
+
+                    print("Putted to queue: {}".format(self._queueDetected.qsize()))     
+                    print(self.lastDetectedFaces)
+                    
             except Exception as ex:
-                print("Error detect")
+                print("Error PredictFrame")
                 print(ex)
                 time.sleep(1)
-                pass
             finally:
-                #time.sleep(0.0001)
-                pass
-            
-        cameraCap._frameThread.join()
-        cameraCap._faceThread.join()
-        
+                time.sleep(0.001)    
+         
     def InitDataTest(self):
         currentDir = os.path.dirname(os.path.realpath(__file__))
         du = cv2.imread(currentDir+"/imgtest/du.png")        
@@ -1614,104 +1772,21 @@ class CameraCapturer:
 
         pass
 
-cameraCap= CameraCapturer(0)
 
 if __name__ == '__main__':
+    
+    cameraCap= CameraCapturer(0)
     cameraCap.InitDataTest()
 
-    cameraCap.Run()
-    
+    t1= Thread(target=cameraCap.Start,daemon=True)
+
+    t1.start()
+
+    while(True):
+        time.sleep(1)
+
+    cameraCap.Stop()
 
 
 
-class UnitTest:
 
-    def Run(self):
-        currentDir = os.path.dirname(os.path.realpath(__file__))
-
-
-        # multiface= cv2.imread(currentDir+"/imgtest/multiface.png")
-        # lstFace=detector.detect_face(multiface)
-        # for f in lstFace:
-        #     cv2.imshow("face found", f[0])
-        #     cv2.waitKey(0)
-        #     pass
-        # exit(0)
-
-        kimlien = cv2.imread(currentDir+"/imgtest/kimlien.jpg")
-        kimlien1 = cv2.imread(currentDir+"/imgtest/kimlien1.jpg")
-        kimlien2 = cv2.imread(currentDir+"/imgtest/kimlien2.png")
-        kimlien3 = cv2.imread(currentDir+"/imgtest/kimlien3.jpg")
-        du = cv2.imread(currentDir+"/imgtest/du.png")
-        multiface = cv2.imread(currentDir+"/imgtest/multiface.png")
-
-        detector = DlibDetector()
-        encoderDlib = DlibResNet()
-        faceNetEncoder = FaceNet()
-        comparer = VectorCompare()
-
-        listImgTest=[kimlien1,kimlien2,kimlien3,du,multiface]
-        listImgTestLbl=["kimlien1","kimlien2","kimlien3","du","multiface"]
-
-        du1 = "C:/Users/Admin/Desktop/bak/du1.aligned.png"
-        du2 = "C:/Users/Admin/Desktop/bak/du2.aligned.png"
-
-        kimlien = cv2.imread(du1)
-        listImgTest=[cv2.imread(du2)]
-
-        (face_croped, region_face) = detector.detect_face(kimlien)[0]
-
-        vectorDlib = encoderDlib.predict(detector.normalize_face(face_croped, 150, 150))[0].tolist()
-
-        vectorFacenet = faceNetEncoder.predict(detector.normalize_face(face_croped, 160, 160))[0].tolist()
-
-        for idx,img in enumerate( listImgTest):
-            foundFaces = detector.detect_face(img)
-            for i,f in enumerate(foundFaces):
-                vdlib=  encoderDlib.predict(detector.normalize_face(f[0], 150, 150))[0].tolist()        
-                distanceDlib = round(np.float64(comparer.findCosineDistance(vectorDlib, vdlib)), 10)
-                     
-                distanceDlibEcl = round(np.float64(comparer.findEuclideanDistance(vectorDlib, vdlib)), 10)
-
-                vfnet=  faceNetEncoder.predict(detector.normalize_face(f[0], 160, 160))[0].tolist()
-                distanceFnet = round(np.float64(comparer.findCosineDistance(vectorFacenet, vfnet)), 10)
-                distanceFnetEcl = round(np.float64(comparer.findEuclideanDistance(vectorFacenet, vfnet)), 10)
-
-                print("{} {} {}".format(listImgTestLbl[idx], idx,i))
-                print("{} {} distanceDlib {}".format(idx,i,distanceDlib))                
-                print("{} {} distanceDlibEcl {}".format(idx,i,distanceDlibEcl))
-
-                print("{} {} distanceFnet {}".format(idx,i,distanceFnet))                
-                print("{} {} distanceFnetEcl {}".format(idx,i,distanceFnetEcl))
-
-                dx0=f[1][0]
-                dy0=f[1][1]
-                dx1=f[1][0]+f[1][2]
-                dy1=f[1][1]+f[1][3]
-                cv2.rectangle(img,(dx0,dy0),(dx1,dy1),(255,255,0,255),2)
-
-                resizeToSeeDetail=img
-                if img.shape[0]<600:
-                    resizeToSeeDetail = cv2.resize(img,(600,int( 600*img.shape[0]/img.shape[1])))
-
-                imgw=f[0].shape[0]
-                imgh=f[0].shape[1]
-                resizeToSeeDetail[0:imgw,0:imgh,:] = f[0][0:imgw,0:imgh,:]
-
-                cv2.putText(resizeToSeeDetail, "{}".format(listImgTestLbl[idx])
-                ,(0,30), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
-                
-                cv2.putText(resizeToSeeDetail, "dlib: {} fnet:{}".format(distanceDlib,distanceFnet)
-                ,(0,70), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
-                
-                cv2.putText(resizeToSeeDetail, "size: {}".format(f[0].shape)
-                ,(0,110), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
-                
-                cv2.putText(resizeToSeeDetail, "region: {}".format(f[1])
-                ,(0,140), cv2.FONT_HERSHEY_SIMPLEX, 1,  (255, 0, 0, 255),  2) 
-
-                cv2.imshow("",resizeToSeeDetail)
-                cv2.waitKey(0)
-
-
-        cv2.destroyAllWindows()       
