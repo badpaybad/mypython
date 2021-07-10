@@ -1599,10 +1599,8 @@ class CameraCapturer:
         self._framePredictThread.start()        
         self._frameDetectFaceProcess.start()        
         self._frameRetreiveFromCameraProcess.start()
-        while(True):
-            time.sleep(1)
 
-        self.Stop()
+        self._framePredictThread.join()
 
     def Stop(self):
         
@@ -1780,6 +1778,15 @@ if __name__ == '__main__':
     cameraCap= CameraCapturer(0)
     cameraCap.InitDataTest()
 
-    cameraCap.Start()
+    t1= Thread(target=cameraCap.Start,daemon=True)
+
+    t1.start()
+
+    while(True):
+        time.sleep(1)
+
+    cameraCap.Stop()
+
+
 
 
