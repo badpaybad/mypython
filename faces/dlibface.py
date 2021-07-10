@@ -1529,7 +1529,7 @@ class CameraCapturer:
                 qsize=frameQueueToDetect.qsize()
                 skip= qsize-3
                 if(skip>0):       
-                    #print("skip {}".format(skip))            
+                    print("skip {} of {}".format(skip, qsize))            
                     for i in range(0,skip):
                         try:
                             frame=frameQueueToDetect.get(False)                           
@@ -1558,9 +1558,11 @@ class CameraCapturer:
                 if(len(foundFace)==0):
                     frame05= CameraCapturer.adjust_gamma(frame,0.5)                    
                     foundFace = detector.detect_face(frame05) 
+                    print("hit gamma 0.5")
                                
                 if(len(foundFace)==0):
-                    foundFace = detector.detect_face(frame)      
+                    foundFace = detector.detect_face(frame)   
+                    print("hit gamma 1")   
 
                 queueToPredict.put((orginalFrame,ratio,foundFace))
                 
