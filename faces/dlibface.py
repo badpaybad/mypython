@@ -1538,7 +1538,7 @@ class CameraCapturer:
                     print("skip {} of {}".format(skip, qsize))            
                     for i in range(0,skip):
                         try:
-                            frame=frameQueueToDetect.get(False)                           
+                            frame=frameQueueToDetect.get()                           
                         except Exception:
                             pass
                 else:        
@@ -1571,7 +1571,7 @@ class CameraCapturer:
                 
                 queueToPredict.put((orginalFrame,ratio,foundFace))
                 t2 =datetime.datetime.now().timestamp()
-                print("----- gammar correct {} face detect in {} seconds".format(lastHitGamma, t2-t1))
+                print("----- gammar correct {} face detect in {} seconds, remain {}".format(lastHitGamma, t2-t1,frameQueueToDetect.qsize()))
                 #queueToPredict.put((frame,1,foundFace))
                         
             except Exception as ex:
