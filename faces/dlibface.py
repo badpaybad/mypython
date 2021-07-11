@@ -1523,7 +1523,13 @@ class CameraCapturer:
     @staticmethod  
     def LoopInfinityDetectFace(frameQueueToDetect,queueToPredict):      
         detector = DlibDetector()
-
+        lastHitGamma="1"
+        smartGamma=["1","1.5","0.5"]
+        smartGammaFunc={
+            "1.5":(lambda f: CameraCapturer.adjust_gamma(f,1.5)),
+            "0.5":(lambda f: CameraCapturer.adjust_gamma(f,0.5)),
+            "1":(lambda f:f)
+        }
         while(True):
             try:           
                 qsize=frameQueueToDetect.qsize()
@@ -1549,23 +1555,23 @@ class CameraCapturer:
                     
                 else :
                     ratio=1
+                t1= datetime.datetime.now().timestamp()
                 
-                frame15= CameraCapturer.adjust_gamma(frame,1.5)
-                # cv2.imshow("gamar correct",frame)
-                # cv2.waitKey(1)
-                foundFace = detector.detect_face(frame15)  
-                              
+                xframe = smartGammaFunc[lastHitGamma](frame)
+                foundFace = detector.detect_face(xframe) 
+                
                 if(len(foundFace)==0):
-                    frame05= CameraCapturer.adjust_gamma(frame,0.5)                    
-                    foundFace = detector.detect_face(frame05) 
-                    print("hit gamma 0.5")
-                               
-                if(len(foundFace)==0):
-                    foundFace = detector.detect_face(frame)   
-                    print("hit gamma 1")   
-
+                    for igama in smartGamma:
+                        if(igama!=lastHitGamma):
+                            xframe = smartGammaFunc[igama](frame)
+                            foundFace = detector.detect_face(xframe)
+                            if(len(foundFace)>0):
+                                lastHitGamma=igama
+                                break
+                
                 queueToPredict.put((orginalFrame,ratio,foundFace))
-                
+                t2 =datetime.datetime.now().timestamp()
+                print("----- gammar correct {} face detect in {} seconds".format(lastHitGamma, t2-t1))
                 #queueToPredict.put((frame,1,foundFace))
                         
             except Exception as ex:
