@@ -1201,17 +1201,16 @@ class VectorCompare:
                     continue
                 resCompare.append((arrayLabels[idx],distance))   
 
-
             resCompare= sorted(resCompare,key= lambda tup:tup[1])
             
             resCompare=resCompare[:takeTop]
             
-            lblArr={}
-            for (l,d) in resCompare:
-                lblArr[l]=d
+            # lblArr={}
+            # for (l,d) in resCompare:
+            #     lblArr[l]=d
 
-            if(len(lblArr)>1):
-                return (None,None)
+            # if(len(lblArr)>1):
+            #     return (None,None)
             
             return (resCompare[0][0],round(resCompare[0][1],3))
 
@@ -1232,12 +1231,12 @@ class VectorCompare:
 
             resCompare= sorted(resCompare,key= lambda tup:tup[1])[:takeTop]
             
-            lblArr={}
-            for (l,d) in resCompare:
-                lblArr[l]=d
+            # lblArr={}
+            # for (l,d) in resCompare:
+            #     lblArr[l]=d
 
-            if(len(lblArr)>1):
-                return (None,None)
+            # if(len(lblArr)>1):
+            #     return (None,None)
             
             return (resCompare[0][0],round(resCompare[0][1],3))
 
@@ -1361,7 +1360,7 @@ class SvmFaceClassifier:
             
             svmResult =self.faceLabels[svmMaxDistanceIdx]
             
-            svmProbability= round( np.float32( probs[svmMaxDistanceIdx]),3)
+            svmProbability= round( float( probs[svmMaxDistanceIdx]),3)
             
             return(svmResult,svmProbability)
 
@@ -1594,12 +1593,12 @@ class CameraCapturer:
         #self.opencvDetector =OpenCvDetector()        
         self.detector = DlibDetector()
         self.encoderDlib = DlibResNet()
-        self.faceNetEncoder = FaceNet()
+        #self.faceNetEncoder = FaceNet()
         self.comparer = VectorCompare()
         
         self.svmFaceClassifierDlib = SvmFaceClassifier()
         
-        self.svmFaceClassifierFacenet = SvmFaceClassifier()
+        #self.svmFaceClassifierFacenet = SvmFaceClassifier()
 
         #self.livenessDetector =LivenessDetector()
 
@@ -1646,20 +1645,20 @@ class CameraCapturer:
             dy1=region_face[1]+region_face[3]
 
             vector= self.encoderDlib.face_vector(face_croped)
-            vectorFn= self.faceNetEncoder.face_vector(face_croped)
+            #vectorFn= self.faceNetEncoder.face_vector(face_croped)
 
             # self.comparer.predictCosiByMin(vector,self.arrVectorDlib,self.arrLabel)
             # self.comparer.predictEcliByMin(vector,self.arrVectorDlib,self.arrLabel)
 
             (lblDlib,valDlib)= self.comparer.predictCosi(vector,self.arrVectorDlib,self.arrLabel )
-            (lblFn,valFn)= self.comparer.predictCosi(vectorFn,self.arrVectorFacenet,self.arrLabel )
-
+            #(lblFn,valFn)= self.comparer.predictCosi(vectorFn,self.arrVectorFacenet,self.arrLabel )
+            (lblFn,valFn)=(None,None)
             (lblDlibEcli,valDlibEcli)= self.comparer.predictEcli(vector,self.arrVectorDlib,self.arrLabel )
-            (lblFnEcli,valFnEcli)= self.comparer.predictEcli(vectorFn,self.arrVectorFacenet,self.arrLabel )
-
+            #(lblFnEcli,valFnEcli)= self.comparer.predictEcli(vectorFn,self.arrVectorFacenet,self.arrLabel )
+            (lblFnEcli,valFnEcli)=(None,None)
             (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)                                        
-            (svmLblFn,svmProbFn) =self.svmFaceClassifierFacenet.Predict(vectorFn)
-
+            #(svmLblFn,svmProbFn) =self.svmFaceClassifierFacenet.Predict(vectorFn)
+            (svmLblFn,svmProbFn) =(None,None)
             lblPredictCombine=""
             
             faceBound= face_croped
@@ -1783,16 +1782,16 @@ class CameraCapturer:
             if(len(ffound)>0):
                 fcrop,rrect = ffound[0]
                 vector =self.encoderDlib.face_vector(fcrop) #[[]]
-                vectorFn= self.faceNetEncoder.face_vector(fcrop)
+                #vectorFn= self.faceNetEncoder.face_vector(fcrop)
                 
                 self.arrVectorDlib.append(vector)           
-                self.arrVectorFacenet.append(vectorFn)     
+                #self.arrVectorFacenet.append(vectorFn)     
         
         self.svmFaceClassifierDlib.Train(self.arrVectorDlib, self.arrLabel)
         self.svmFaceClassifierDlib.SaveModel()
                 
-        self.svmFaceClassifierFacenet.Train(self.arrVectorFacenet, self.arrLabel)
-        self.svmFaceClassifierFacenet.SaveModel()
+        #self.svmFaceClassifierFacenet.Train(self.arrVectorFacenet, self.arrLabel)
+        #self.svmFaceClassifierFacenet.SaveModel()
 
         pass
 
