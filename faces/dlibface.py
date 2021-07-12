@@ -1391,7 +1391,7 @@ class CameraCapturer:
                 queueDisplay.put(frame)
 
                 timeNow = datetime.datetime.now().timestamp()
-                if(timeNow - lasttime>0.3):
+                if(timeNow - lasttime>0.5):
                     qsize=queueToDetect.qsize()
                     
                     print('Puting frame to detect at: {} with fps {}, frame width {} frame count to detect {}'.format(timeNow,fps, width,qsize))
@@ -1532,7 +1532,7 @@ class CameraCapturer:
         while(True):
             try:           
                 qsize=frameQueueToDetect.qsize()
-                skip= qsize-3
+                skip= qsize-1
                 if(skip>0):       
                     print("skip {} of {}".format(skip, qsize))            
                     for i in range(0,skip):
@@ -1638,7 +1638,7 @@ class CameraCapturer:
             #(propPrint,propRelay)=self.livenessDetector.Predict(face_croped)
             #cv2.imshow("face found", face_croped)
             #cv2.waitKey(1)
-
+            t1 = datetime.datetime.now().timestamp()
             dx0=region_face[0]
             dy0=region_face[1]
             dx1=region_face[0]+region_face[2]
@@ -1650,10 +1650,10 @@ class CameraCapturer:
             # self.comparer.predictCosiByMin(vector,self.arrVectorDlib,self.arrLabel)
             # self.comparer.predictEcliByMin(vector,self.arrVectorDlib,self.arrLabel)
 
-            (lblDlib,valDlib)= self.comparer.predictCosi(vector,self.arrVectorDlib,self.arrLabel )
+            (lblDlib,valDlib)= self.comparer.predictCosiByMin(vector,self.arrVectorDlib,self.arrLabel )
             #(lblFn,valFn)= self.comparer.predictCosi(vectorFn,self.arrVectorFacenet,self.arrLabel )
             (lblFn,valFn)=(None,None)
-            (lblDlibEcli,valDlibEcli)= self.comparer.predictEcli(vector,self.arrVectorDlib,self.arrLabel )
+            (lblDlibEcli,valDlibEcli)= self.comparer.predictEcliByMin(vector,self.arrVectorDlib,self.arrLabel )
             #(lblFnEcli,valFnEcli)= self.comparer.predictEcli(vectorFn,self.arrVectorFacenet,self.arrLabel )
             (lblFnEcli,valFnEcli)=(None,None)
             (svmLblDlib,svmProbDlib) =self.svmFaceClassifierDlib.Predict(vector)                                        
@@ -1667,37 +1667,40 @@ class CameraCapturer:
             if(lblDlib==lblDlibEcli and lblDlib==svmLblDlib):
                 if(valDlib<=0.05 and valDlibEcli<= 0.5 and svmProbDlib<0.85):
                     lblPredictCombine=lblDlib
-                    allowSent =True
+                    # allowSent =True
                     
-                    if( lblPredictCombine in self.last_sent_notification.keys()):
-                        nowTime =datetime.datetime.now().timestamp()                                
-                        lastSent= self.last_sent_notification[lblPredictCombine]
+                    # if( lblPredictCombine in self.last_sent_notification.keys()):
+                    #     nowTime =datetime.datetime.now().timestamp()                                
+                    #     lastSent= self.last_sent_notification[lblPredictCombine]
 
-                        if(nowTime- lastSent>2):
-                            allowSent=True
-                        else:
-                            allowSent=False
+                    #     if(nowTime- lastSent>2):
+                    #         allowSent=True
+                    #     else:
+                    #         allowSent=False
 
-                    if(allowSent):
-                        nowTime =datetime.datetime.now().timestamp()       
-                        fileName=lblPredictCombine+"_"+str(nowTime)+".jpg"
+                    # if(allowSent):
+                    #     nowTime =datetime.datetime.now().timestamp()       
+                    #     fileName=lblPredictCombine+"_"+str(nowTime)+".jpg"
 
-                        #left = d.left()#x0
-                        #right = d.right()#x1
-                        #top = d.top()#y0
-                        #bottom = d.bottom()#y1
-                        try:
-                            faceBound= orginalFrame[dy0*ratio-100:dy1*ratio+100, dx0*ratio-100:dx1*ratio+100]
-                        except:
-                            faceBound= face_croped
-                            pass
-                        try:
-                            cv2.imwrite(fileImgPub, faceBound)
-                        except:
-                            pass
+                    #     #left = d.left()#x0
+                    #     #right = d.right()#x1
+                    #     #top = d.top()#y0
+                    #     #bottom = d.bottom()#y1
+                    #     try:
+                    #         faceBound= orginalFrame[dy0*ratio-100:dy1*ratio+100, dx0*ratio-100:dx1*ratio+100]
+                    #     except:
+                    #         faceBound= face_croped
+                    #         pass
+                    #     try:
+                    #         cv2.imwrite(fileImgPub, faceBound)
+                    #     except:
+                    #         pass
                         
-                        self.last_sent_notification[lblPredictCombine]= nowTime
-                       
+                    #     self.last_sent_notification[lblPredictCombine]= nowTime
+                    
+            t2 = datetime.datetime.now().timestamp()
+            
+            print("------------------- Predict in {} ".format(t2-t1)) 
             return (
             dx0, dy0, dx1, dy1, 
             svmLblDlib, svmProbDlib,
