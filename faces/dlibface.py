@@ -1611,7 +1611,7 @@ class CameraCapturer:
         self.last_sent_notification={}
         
         self._frameRetreiveFromCameraProcess = Process(target=CameraCapturer.LoopInfinityGetFrame, args=(self._frameQueueToDetect,self._frameQueueDisplay , self._cameraUrl) , daemon=True)
-        self._frameDetectFaceProcess =  Process(target=CameraCapturer.LoopInfinityDetectFace,args=(self._frameQueueToDetect,self._queueToPredict),  daemon=True)
+        self._frameDetectFaceProcess =  Thread(target=CameraCapturer.LoopInfinityDetectFace,args=(self._frameQueueToDetect,self._queueToPredict),  daemon=True)
         self._framePredictThread =  Thread(target=self.LoopInfinityPredictFrame, args=(self._queueToPredict,self._queueDetected), daemon=True)
         self._faceShowFrameRetreivedProcess = Process(target=CameraCapturer.LoopInfinityShowFrame, args=(self._frameQueueDisplay,self._queueDetected) , daemon=True)                     
         
