@@ -9,6 +9,8 @@ from tensorflow import keras
 import matplotlib.pyplot as plt
 import tensorflow_datasets as tfds
 
+coco_lables="person\nbicycle\ncar\nmotorcycle\nairplane\nbus\ntrain\ntruck\nboat\ntraffic light\nfire hydrant\nstop sign\nparking meter\nbench\nbird\ncat\ndog\nhorse\nsheep\ncow\nelephant\nbear\nzebra\ngiraffe\nbackpack\numbrella\nhandbag\ntie\nsuitcase\nfrisbee\nskis\nsnowboard\nsports ball\nkite\nbaseball bat\nbaseball glove\nskateboard\nsurfboard\ntennis racket\nbottle\nwine glass\ncup\nfork\nknife\nspoon\nbowl\nbanana\napple\nsandwich\norange\nbroccoli\ncarrot\nhot dog\npizza\ndonut\ncake\nchair\ncouch\npotted plant\nbed\ndining table\ntoilet\ntv\nlaptop\nmouse\nremote\nkeyboard\ncell phone\nmicrowave\noven\ntoaster\nsink\nrefrigerator\nbook\nclock\nvase\nscissors\nteddy bear\nhair drier\ntoothbrush".split("\n")
+
 #https://keras.io/examples/vision/retinanet/
 #https://storage.googleapis.com/tensorflow/keras-applications/resnet/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5
 url = "https://github.com/srihari-humbarwadi/datasets/releases/download/v0.1.0/data.zip"
@@ -300,15 +302,16 @@ def preprocess_data(sample):
     bbox = swap_xy(sample["objects"]["bbox"])
     class_id = tf.cast(sample["objects"]["label"], dtype=tf.int32)
 
-    image, bbox = random_flip_horizontal(image, bbox)
-    image, image_shape, _ = resize_and_pad_image(image)
-
+    #image, bbox = random_flip_horizontal(image, bbox)
+    #image, image_shape, ratio = resize_and_pad_image(image)
+    image_shape = tf.cast(tf.shape(image)[:2], dtype=tf.float32)
+    
     bbox = tf.stack(
         [
-            bbox[:, 0] * image_shape[1],
-            bbox[:, 1] * image_shape[0],
-            bbox[:, 2] * image_shape[1],
-            bbox[:, 3] * image_shape[0],
+            (bbox[:, 0]) * image_shape[1],
+            (bbox[:, 1]) * image_shape[0],
+            (bbox[:, 2]) * image_shape[1],
+            (bbox[:, 3]) * image_shape[0],
         ],
         axis=-1,
     )
@@ -718,6 +721,42 @@ callbacks_list = [
 
 autotune = tf.data.experimental.AUTOTUNE
 train_dataset = train_dataset.map(preprocess_data, num_parallel_calls=autotune)
+
+
+for sample in train_dataset.take(3):
+   
+    image =np.array( sample[0], dtype=np.uint8)
+    boxs = np.array(sample[1], dtype=np.float32)    
+    class_id =np.array(sample[2],dtype=np.uint8)
+ 
+    plt.clf()
+    plt.imshow(image)
+    ax = plt.gca()
+    linewidth=1
+    color=[0, 0, 1]
+    for idx, box in enumerate( boxs):        
+        x1, y1, w, h = box
+        print(image.shape)
+        patch = plt.Rectangle(
+            [x1, y1], w, h, fill=False, edgecolor=color, linewidth=linewidth
+        )
+        ax.add_patch(patch)       
+        text="clsid:{} lbl: {}".format(class_id[idx], coco_lables[class_id[idx]])
+        ax.text(
+            x1,
+            y1+(idx* 20),
+            text,
+            bbox={"facecolor": [1,1,1], "alpha": 0.4},
+            clip_box=ax.clipbox,
+            clip_on=True,
+        )
+        
+    
+        plt.waitforbuttonpress()  
+
+exit()
+
+
 train_dataset = train_dataset.shuffle(8 * batch_size)
 train_dataset = train_dataset.padded_batch(
     batch_size=batch_size, padding_values=(0.0, 1e-8, -1), drop_remainder=True

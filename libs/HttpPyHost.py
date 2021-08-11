@@ -104,7 +104,13 @@ class RoutingHandle:
         self.__routing[""] = self.Index
         self.__routing["/"] = self.Index
 
-    def RegisterHanle(self, url:str, func:function):
+    def RegisterHanle(self, url:str, func):
+        """[summary]
+
+        Args:
+            url (str): [path url without domain]
+            func ([type]): [function or lambda]
+        """
         if url.startswith("/")==False :
             url="/"+url
         url=url.lower()
