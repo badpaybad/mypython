@@ -120,8 +120,11 @@ class DlibResNet:
 
             model = self.__model
             #small 5 point pose
-
-            img_representation = model.compute_face_descriptor(img_aligned,10)
+            
+            #10: more detail but slow 10 times
+            #img_representation = model.compute_face_descriptor(img_aligned,10)
+            
+            img_representation = model.compute_face_descriptor(img_aligned,1)
 
             img_representation = np.array(img_representation)
             img_representation = np.expand_dims(img_representation, axis=0)
@@ -133,8 +136,14 @@ class DlibResNet:
     
     def face_vector(self,img_face_croped):
         try:
-            imgResized=self.normalize_face(img_face_croped, 150, 150)
+            #t1= datetime.datetime.now().timestamp()
+            imgResized=self.normalize_face(img_face_croped, 150, 150)            
+            #t2= datetime.datetime.now().timestamp()
+            #print("{} resize".format(t2-t1))
             vector=self.predict(imgResized)[0].tolist()
+            
+            #t2= datetime.datetime.now().timestamp()
+            #print("{} vector".format(t2-t1))
             # vectorR=[]
             # for i in vector:
             #     vectorR.append( round(i,8))
@@ -168,7 +177,7 @@ class DlibDetector:
 
         import dlib  # this requirement is not a must that's why imported here
         self.file_weights = self.__FileFolder + '/weights/shape_predictor_5_face_landmarks.dat'
-        self.file_weights = self.__FileFolder + '/weights/shape_predictor_68_face_landmarks.dat'
+        #self.file_weights = self.__FileFolder + '/weights/shape_predictor_68_face_landmarks.dat'
             #shape_predictor_68_face_landmarks.dat
         # print(os.path.isfile(self.file_weights))
         # exit(0)
@@ -673,6 +682,9 @@ class DlibSingleThread:
         fileFacenetModel= currentDir+"/{}.svc.facenet.model".format(id)
 
         folderFound=currentDir+"/{}.foundfaces".format(id)
+        
+        if( not os.path.exists(folderFound)):
+            os.makedirs(folderFound)
  
         print("root app: "+  currentDir )
         print("faces to: "+ folderFound)
@@ -726,17 +738,24 @@ class DlibSingleThread:
             if(len(ffound)>0):
                 fcropO,rrect,points = ffound[0]
 
-                fcropAugm= [fcropO,imgAugm.rotate(fcropO,3),imgAugm.rotate(fcropO,-3),
+                fcropAugm= [fcropO
+                            #,imgAugm.rotate(fcropO,3),imgAugm.rotate(fcropO,-3),
                             #imgAugm.rotate(fcropO,10),imgAugm.rotate(fcropO,-10),
                             #imgAugm.rotate(fcropO,15),imgAugm.rotate(fcropO,-15)
                             ]
 
-                for fcrop in fcropAugm:
+                for idxf,fcrop in enumerate( fcropAugm):
                     vector,imgresized =self.encoderDlib.face_vector(fcrop) #[[]]
                     #vectorFn= self.faceNetEncoder.face_vector(fcrop)
                     
                     self.arrVectorDlib.append(vector)         
                     self.arrLabel.append(lbl)  
+                                      
+                    fileToWrite="{}/{}_{}_agm_{}.jpg".format(folderFound,lbl,idx,idxf)
+                    
+                    print (fileToWrite)     
+                    
+                    cv2.imwrite(fileToWrite ,imgresized)
                 #self.arrVectorFacenet.append(vectorFn)             
         
         print(len(self.arrVectorDlib))
@@ -868,7 +887,8 @@ class DlibSingleThread:
                                     
                                     self.arrLabel.append(lbl)
                                     
-                                    fileToWrite=folderFound+"/"+lbl+"_augm"+str(idxf)+"_"+Path(f).name
+                                    fileToWrite="{}/{}_agm_{}_{}".format(folderFound,lbl,idxf,Path(f).name)
+                                    
                                     print (fileToWrite)     
                                     cv2.imwrite(fileToWrite ,imgresized)
 
@@ -912,18 +932,20 @@ class DlibSingleThread:
         foundFace = None
         t1= datetime.datetime.now().timestamp()
         foundFace = self.detector.DetectFace(xframe) 
-        t2= datetime.datetime.now().timestamp()
-        print("{} Detect in {}".format(len(foundFace), t2-t1))
+       
         if(len(foundFace)==0):
             for igama in self.smartGamma:
                 if(igama!=self.lastHitGamma):
-                    xframe = self.smartGammaFunc[igama](frame)
+                    xframe = self.smartGammaFunc[igama](xframe)
 
                     foundFace = self.detector.DetectFace(xframe) 
 
                     if(len(foundFace)>0):
                         self.lastHitGamma=igama
                         break
+        
+        t2= datetime.datetime.now().timestamp()
+        print("{} Detect in {} gama {}".format(len(foundFace), t2-t1, self.lastHitGamma))
         
         foundFaceRectOrg=[]
         
@@ -1174,7 +1196,7 @@ class DlibSingleThread:
             try:                
                 tnow =datetime.datetime.now().timestamp()
 
-                if(tnow- tlastfound>2):                    
+                if(tnow- tlastfound>20):                    
                     myLastDetect=[]
                     myLastRecognize=[]
 
