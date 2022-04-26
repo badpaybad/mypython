@@ -30,9 +30,7 @@ except:
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-
 nltk.download('punkt')
-# https://www.youtube.com/watch?reload=9&v=NkfxjRKSnpU
 # nltk.download()
 
 stemmer = LancasterStemmer()
