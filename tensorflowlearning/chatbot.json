@@ -1,0 +1,29 @@
+{
+    "intents":[
+        {
+            "tag":"greeting",            
+            "patterns":["hi", "xin chao"],
+            "responses":["hi", "how r you","chao ban"],
+            "context_set":""
+        },
+        {
+            "tag":"greetingdu",            
+            "patterns":["hi du", "xin chao du"],
+            "responses":["123", "456","789"],
+            "context_set":""
+        }
+        ,
+        {
+            "tag":"greetingsau",            
+            "patterns":["hi sau", "xin chao sau"],
+            "responses":["aaa", "bbb","ccc"],
+            "context_set":""
+        },
+        {
+            "tag":"greetingdudu",            
+            "patterns":["dudu", "dudu"],
+            "responses":["xxxx", "xxx","xxx"],
+            "context_set":""
+        }
+    ]
+}
