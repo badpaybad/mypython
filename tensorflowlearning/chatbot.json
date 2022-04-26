@@ -2,21 +2,21 @@
     "intents":[
         {
             "tag":"greeting",            
-            "patterns":["hi", "xin chao"],
+            "patterns":["hi", "xin chào","chào","buổi sáng tốt lành","chào buổi tối","buổi sáng vui vẻ","buổi sáng"],
             "responses":["hi", "how r you","chao ban"],
             "context_set":""
         },
         {
             "tag":"greetingdu",            
-            "patterns":["hi du", "xin chao du"],
-            "responses":["123", "456","789"],
+            "patterns":["hi du", "xin chao du","buổi sáng"],
+            "responses":["chào du", "hi du","chào buổi sáng"],
             "context_set":""
         }
         ,
         {
             "tag":"greetingsau",            
-            "patterns":["hi sau", "xin chao sau"],
-            "responses":["aaa", "bbb","ccc"],
+            "patterns":["hi sau", "xin chao sau","chào bạn","buổi sáng","chào buổi sáng"],
+            "responses":["xin chào sâu", "chào bạn","hi sâu"],
             "context_set":""
         },
         {
