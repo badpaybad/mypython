@@ -114,6 +114,7 @@ try:
 
 except Exception as exerr:
     myChatModel = Sequential()
+    #sample model , should investigate to improve
     myChatModel.add(Dense(8, input_shape=[len(words)], activation="relu"))
     myChatModel.add(Dense(len(labels), activation="softmax"))
 
