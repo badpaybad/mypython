@@ -1,4 +1,5 @@
 import os
+import datetime 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import torch
 #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -116,14 +117,14 @@ def cut_and_shift_audio( input_waveform,  reference_waveform,  shift_duration=0.
     # Calculate the number of frames to shift with each step
     shift_frames = int(shift_duration * reference_sample_rate)
 
-    print("frames_to_keep")
-    print(frames_to_keep)
-    print("slice_frames")
-    print(slice_frames)
-    print("shift_frames")
-    print(shift_frames)
-    print("cut_reference_waveform")
-    print(reference_waveform.size(1))
+    # print("frames_to_keep")
+    # print(frames_to_keep)
+    # print("slice_frames")
+    # print(slice_frames)
+    # print("shift_frames")
+    # print(shift_frames)
+    # print("cut_reference_waveform")
+    # print(reference_waveform.size(1))
     # Cut and shift the waveform
     slices = []
     counter=0
@@ -132,9 +133,10 @@ def cut_and_shift_audio( input_waveform,  reference_waveform,  shift_duration=0.
         current_slice = reference_waveform[:, i:slice_end]
         slices.append(current_slice)
                 
-        # Save the cut waveform
-        output_path = f"cut_{counter}_{i}.wav"
-        torchaudio.save(output_path, current_slice, sample_rate=reference_sample_rate)
+        # # Save the cut waveform
+        # output_path = f"cut_{counter}_{i}.wav"
+        # torchaudio.save(output_path, current_slice, sample_rate=reference_sample_rate)
+        
         counter=counter+1
 
         
@@ -153,21 +155,23 @@ def cut_and_shift_audio( input_waveform,  reference_waveform,  shift_duration=0.
     return slices
 
 
-def compare_wav(waveform, waveformbig):
+def compare_wav(waveform, waveformbig,shift_duration=0.2):
     
     f0= get_feature_wav(waveform)
     
-    chunks= cut_and_shift_audio(waveform, waveformbig)
+    chunks= cut_and_shift_audio(waveform, waveformbig, shift_duration)
     
-    print(len(chunks))
-            
+    res=[]
     for i, slice_waveform in enumerate(chunks):
         f1= get_feature_wav(slice_waveform)
         # print(waveform.size())
         # print(slice_waveform.size())
                 
         s= findCosineDistance(f0,f1)
-        print([i, s])
+        if s< 0.4:
+            res.append((i,s,slice_waveform,waveform))
+        #print([i, s])
+    return res
 
 def load2waveform(filepath):        
     waveform, sample_rate = torchaudio.load(filepath)
@@ -178,7 +182,28 @@ def load2waveform(filepath):
         
     return waveform
 
-compare_wav(load2waveform("hello11.wav"), load2waveform("hello2.wav"))
+def test():
+    res=compare_wav(load2waveform("hello11.wav"), load2waveform("hello2.wav"))
+    minS= 9999
+    minR=None
+    for r in res:
+        i,s,w,w0=r
+        if s< minS:
+            minS=s
+            minR=r
+
+    print(minR)
+    with torch.inference_mode():
+        emission, _ = model(minR[2])
+        decoder = GreedyCTCDecoder(labels=bundle.get_labels())
+        transcript = decoder(emission[0])
+        print("transcript")
+        print(transcript)
+    
+for i in range(0,1):
+    print(datetime.datetime.now())
+    test()
+    print(datetime.datetime.now())
 
 # with torch.inference_mode():
 #     emission, _ = model(waveform)
