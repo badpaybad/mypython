@@ -5,7 +5,7 @@ ffmpeg -y -i hello.m4a hello1.wav
 
 # trim from sec # -ss 60 -to 70
 
-ffmpeg -y -i hello.m4a -ss 00:00:00.500  hello11.wav
+ffmpeg -y -i hello.m4a -ss 00:00:00.500 -to  00:00:02.000  hello11.wav
 
 # model 
 

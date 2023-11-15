@@ -22,10 +22,11 @@ def findCosineDistance( source_representation, test_representation):
         if type(test_representation) == list:
             test_representation = np.array(test_representation)
         
-        a = np.matmul(np.transpose(source_representation), test_representation)
+        #a = np.matmul(np.transpose(source_representation), test_representation)
+        a = np.matmul(source_representation, test_representation)
         b = np.sum(np.multiply(source_representation, source_representation))
         c = np.sum(np.multiply(test_representation, test_representation))
-        return 1 - (a / (np.sqrt(b) * np.sqrt(c)))
+        return  1- (a / (np.sqrt(b) * np.sqrt(c)))
     except Exception as ex:
         print("Error findCosineDistance")
         print(ex)
@@ -155,7 +156,7 @@ def cut_and_shift_audio( input_waveform,  reference_waveform,  shift_duration=0.
     return slices
 
 
-def compare_wav(waveform, waveformbig,shift_duration=0.2):
+def compare_wav(waveform, waveformbig, threshold_score=0.55,shift_duration=0.2):
     
     f0= get_feature_wav(waveform)
     
@@ -168,9 +169,9 @@ def compare_wav(waveform, waveformbig,shift_duration=0.2):
         # print(slice_waveform.size())
                 
         s= findCosineDistance(f0,f1)
-        if s< 0.4:
-            res.append((i,s,slice_waveform,waveform))
-        #print([i, s])
+        if s< threshold_score:
+            res.append((i,s,slice_waveform,waveform, waveformbig))
+        print([i, s])
     return res
 
 def load2waveform(filepath):        
@@ -187,18 +188,25 @@ def test():
     minS= 9999
     minR=None
     for r in res:
-        i,s,w,w0=r
+        i,s,w,w0,wl=r
         if s< minS:
             minS=s
             minR=r
+            
+        # Save the cut waveform
+        output_path = f"cut_{i}_{s}.wav"
+        torchaudio.save(output_path, w, sample_rate=bundle.sample_rate)
 
-    print(minR)
-    with torch.inference_mode():
-        emission, _ = model(minR[2])
-        decoder = GreedyCTCDecoder(labels=bundle.get_labels())
-        transcript = decoder(emission[0])
-        print("transcript")
-        print(transcript)
+        with torch.inference_mode():
+            emission, _ = model(w)
+            decoder = GreedyCTCDecoder(labels=bundle.get_labels())
+            transcript = decoder(emission[0])
+            print("transcript")
+            print(transcript)
+        
+        # # Save the cut waveform
+        # output_path = f"cut_{minR[0]}.wav"
+        # torchaudio.save(output_path, minR[2], sample_rate=bundle.sample_rate)
     
 for i in range(0,1):
     print(datetime.datetime.now())
