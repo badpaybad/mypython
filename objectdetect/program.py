@@ -6,7 +6,10 @@ import torch
 device = torch.device("cpu")
 print(device)
 #pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
-#https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth
+# https://download.pytorch.org/torchaudio/models/wav2vec2_fairseq_base_ls960_asr_ls960.pth
+
+# https://github.com/facebookresearch/fairseq/tree/main/examples/wav2vec#wav2vec-20
+
 import torchaudio
 print(torch.__version__)
 print(torchaudio.__version__)
@@ -14,23 +17,7 @@ torch.random.manual_seed(0)
 
 import numpy as np
 
-def findCosineDistance( source_representation, test_representation):
-    try:
-        if type(source_representation) == list:
-            source_representation = np.array(source_representation)
-
-        if type(test_representation) == list:
-            test_representation = np.array(test_representation)
-        
-        #a = np.matmul(np.transpose(source_representation), test_representation)
-        a = np.matmul(source_representation, test_representation)
-        b = np.sum(np.multiply(source_representation, source_representation))
-        c = np.sum(np.multiply(test_representation, test_representation))
-        return  1- (a / (np.sqrt(b) * np.sqrt(c)))
-    except Exception as ex:
-        print("Error findCosineDistance")
-        print(ex)
-
+import utils as Ultils
 
 class GreedyCTCDecoder(torch.nn.Module):
     def __init__(self, labels, blank=0):
@@ -63,10 +50,13 @@ print("Labels:", bundle.get_labels())
 
 model = bundle.get_model().to(device)
 
-SAMPLE_RATE= bundle.sample_rate
+state_dict = torch.load("/work/mypython/objectdetect/wav2vec2_fairseq_base_ls960_asr_ls960.pth", map_location=device)
+model.load_state_dict(state_dict)
+model.eval()
 
 print("model.__class__")
 print(model.__class__)
+
 
 def get_feature_wav(waveform):
 
@@ -76,7 +66,8 @@ def get_feature_wav(waveform):
     # if sample_rate != bundle.sample_rate:
     #     waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
         
-    with torch.inference_mode():
+    with torch.inference_mode():      
+        
         features, _ = model.extract_features(waveform)
         # print("features")
         # print(features)
@@ -93,74 +84,11 @@ def get_feature_wav(waveform):
         return f
 
 
-def cut_and_shift_audio( input_waveform,  reference_waveform,  shift_duration=0.1):
-    # Load audio files
-    # input_waveform, input_sample_rate = torchaudio.load(input_audio_path)
-    # reference_waveform, reference_sample_rate = torchaudio.load(reference_audio_path)
-    input_sample_rate= bundle.sample_rate
-    reference_sample_rate=bundle.sample_rate
-    # Calculate the duration of a.wav
-    duration_a = input_waveform.size(1) / input_sample_rate
-    duration_a_ref= reference_waveform.size(1) / reference_sample_rate
-    # print("duration_a")
-    # print(duration_a)
-    # print("reference_waveform duraation")    
-    # print(duration_a_ref)
-
-    # Calculate the number of frames in b.wav corresponding to the duration of a.wav
-    frames_to_keep = int(duration_a * reference_sample_rate)
-   
-    # cut_reference_waveform = reference_waveform[:, :frames_to_keep]
-
-    # Calculate the number of frames in each slice with the duration of a.wav
-    slice_frames = input_waveform.size(1)
-
-    # Calculate the number of frames to shift with each step
-    shift_frames = int(shift_duration * reference_sample_rate)
-
-    # print("frames_to_keep")
-    # print(frames_to_keep)
-    # print("slice_frames")
-    # print(slice_frames)
-    # print("shift_frames")
-    # print(shift_frames)
-    # print("cut_reference_waveform")
-    # print(reference_waveform.size(1))
-    # Cut and shift the waveform
-    slices = []
-    counter=0
-    for i in range(0, reference_waveform.size(1) - slice_frames + 1, shift_frames):
-        slice_end = i + slice_frames
-        current_slice = reference_waveform[:, i:slice_end]
-        slices.append(current_slice)
-                
-        # # Save the cut waveform
-        # output_path = f"cut_{counter}_{i}.wav"
-        # torchaudio.save(output_path, current_slice, sample_rate=reference_sample_rate)
-        
-        counter=counter+1
-
-        
-    """
-        
-    # Example usage
-    input_audio_path = "a.wav"
-    reference_audio_path = "b.wav"
-    slices = cut_and_shift_audio(input_audio_path, reference_audio_path, shift_duration=0.1)
-
-    # Each element in 'slices' is a waveform with the duration of a.wav
-    for i, slice_waveform in enumerate(slices):
-        print(f"Slice {i + 1}: {slice_waveform.size(1)} frames")
-    """
-
-    return slices
-
-
-def compare_wav(waveform, waveformbig, threshold_score=0.55,shift_duration=0.2):
+def find_subwav_in_longwav(waveform_sub, waveform_long, threshold_score=0.55,shift_duration=0.2):
     
-    f0= get_feature_wav(waveform)
+    f0= get_feature_wav(waveform_sub)
     
-    chunks= cut_and_shift_audio(waveform, waveformbig, shift_duration)
+    chunks= Ultils.cut_and_shift_audio(waveform_sub, waveform_long, shift_duration, bundle.sample_rate)
     
     res=[]
     for i, slice_waveform in enumerate(chunks):
@@ -168,23 +96,16 @@ def compare_wav(waveform, waveformbig, threshold_score=0.55,shift_duration=0.2):
         # print(waveform.size())
         # print(slice_waveform.size())
                 
-        s= findCosineDistance(f0,f1)
-        if s< threshold_score:
-            res.append((i,s,slice_waveform,waveform, waveformbig))
+        s=  Ultils.findCosineDistance(f0,f1)
+        if s!=None and s< threshold_score:
+            res.append((i,s,slice_waveform,waveform_sub, waveform_long))
         print([i, s])
     return res
 
-def load2waveform(filepath):        
-    waveform, sample_rate = torchaudio.load(filepath)
-    waveform = waveform.to(device)
-
-    if sample_rate != bundle.sample_rate:
-        waveform = torchaudio.functional.resample(waveform, sample_rate, bundle.sample_rate)
-        
-    return waveform
-
 def test():
-    res=compare_wav(load2waveform("hello11.wav"), load2waveform("hello2.wav"))
+    wf0= Ultils.load2waveform("hello11.wav", bundle.sample_rate)
+    wf1= Ultils.load2waveform("hello2.wav", bundle.sample_rate)
+    res=find_subwav_in_longwav(wf0, wf1)
     minS= 9999
     minR=None
     for r in res:
@@ -203,7 +124,13 @@ def test():
             transcript = decoder(emission[0])
             print("transcript")
             print(transcript)
-        
+
+    with torch.inference_mode():
+        emission, _ = model(wf1)
+        decoder = GreedyCTCDecoder(labels=bundle.get_labels())
+        transcript = decoder(emission[0])
+        print("transcript wf1")
+        print(transcript)    
         # # Save the cut waveform
         # output_path = f"cut_{minR[0]}.wav"
         # torchaudio.save(output_path, minR[2], sample_rate=bundle.sample_rate)
