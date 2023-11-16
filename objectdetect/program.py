@@ -99,12 +99,12 @@ def find_subwav_in_longwav(waveform_sub, waveform_long, threshold_score=0.55,shi
         s=  Ultils.findCosineDistance(f0,f1)
         if s!=None and s< threshold_score:
             res.append((i,s,slice_waveform,waveform_sub, waveform_long))
-        print([i, s])
+        #print([i, s])
     return res
 
 def test():
-    wf0= Ultils.load2waveform("hello11.wav", bundle.sample_rate)
-    wf1= Ultils.load2waveform("hello2.wav", bundle.sample_rate)
+    wf0= Ultils.load2waveform("hello11.wav", bundle.sample_rate,True)
+    wf1= Ultils.load2waveform("hello2.wav", bundle.sample_rate,True)
     res=find_subwav_in_longwav(wf0, wf1)
     minS= 9999
     minR=None

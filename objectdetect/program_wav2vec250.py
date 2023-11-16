@@ -99,6 +99,7 @@ def get_feature_wav(waveform16000):
     f,t= feature_extractor_waveform16000(waveform16000)
     f=f[0].detach().numpy()
     f=f.flatten()
+    
     return f
 
 def find_subwav_in_longwav(waveform_sub, waveform_long, threshold_score=0.3,shift_duration=0.2, SAMPLE_RATE=16000):
@@ -116,7 +117,7 @@ def find_subwav_in_longwav(waveform_sub, waveform_long, threshold_score=0.3,shif
         s=  Ultils.findCosineDistance(f0,f1)
         if s!=None and s< threshold_score:
             res.append((i,s,slice_waveform,waveform_sub, waveform_long))
-        print([i, s])
+        # print([i, s])
     return res
 
 
