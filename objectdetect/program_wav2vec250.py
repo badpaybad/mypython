@@ -15,7 +15,8 @@ torch.random.manual_seed(0)
 
 import utils as Ultils
 
-#https://huggingface.co/nguyenvulebinh/wav2vec2-base-vietnamese-250h
+#https://huggingface.co/CuongLD/wav2vec2-large-xlsr-vietnamese/
+
 
 # load model and tokenizer
 processor = Wav2Vec2Processor.from_pretrained("/data/wav2vec2-large-xlsr-vietnamese") 
